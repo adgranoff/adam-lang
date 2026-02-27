@@ -64,10 +64,13 @@ fn main() {
         "compile" => {
             let program = lex_and_parse(&source);
 
-            // Run type checker (errors are warnings — compilation proceeds).
+            // Run type checker — errors are fatal.
             let type_errors = adam_compiler::types::check(&program);
-            for err in &type_errors {
-                eprintln!("warning: {}", err);
+            if !type_errors.is_empty() {
+                for err in &type_errors {
+                    eprintln!("{}", err);
+                }
+                process::exit(65);
             }
 
             // Run autograd pass — transforms grad(f) calls into gradient functions.

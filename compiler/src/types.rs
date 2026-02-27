@@ -608,6 +608,8 @@ pub struct TypeChecker {
     adts: HashMap<String, AdtDef>,
     /// Mapping from dimension variable names (N, M, K) to their IDs.
     dim_var_names: HashMap<String, u32>,
+    /// Mapping from type parameter names (T, U, V) to fresh variable IDs.
+    type_param_names: HashMap<String, u32>,
 }
 
 impl TypeChecker {
@@ -619,6 +621,7 @@ impl TypeChecker {
             structs: HashMap::new(),
             adts: HashMap::new(),
             dim_var_names: HashMap::new(),
+            type_param_names: HashMap::new(),
         };
         // Register built-in functions.
         tc.register_builtins();
@@ -913,10 +916,20 @@ impl TypeChecker {
                             variants: adt.variants.clone(),
                         }
                     } else {
-                        // Unknown type — treat as a type variable name.
-                        // This handles generic type parameters like T.
-                        Type::Var(0) // Placeholder; proper generics would
-                                     // use a mapping from names to var IDs.
+                        // Unknown type — treat as a type parameter (T, U, etc.).
+                        // Reuse the same variable ID for repeated references
+                        // to the same name within a scope.
+                        if let Some(&id) = self.type_param_names.get(other) {
+                            Type::Var(id)
+                        } else {
+                            let var = self.subst.fresh_var();
+                            if let Type::Var(id) = var {
+                                self.type_param_names.insert(other.to_string(), id);
+                                var
+                            } else {
+                                unreachable!()
+                            }
+                        }
                     }
                 }
             },
@@ -1056,6 +1069,12 @@ impl TypeChecker {
                 return_type,
                 body,
             } => {
+                // Each function gets its own type parameter and dimension
+                // variable scope. Without this, `T` in fn f would alias
+                // `T` in fn g, and dim var bindings would leak across functions.
+                self.type_param_names.clear();
+                self.dim_var_names.clear();
+
                 // Create fresh type variables for each parameter.
                 let param_types: Vec<Type> = params
                     .iter()
@@ -1189,77 +1208,120 @@ impl TypeChecker {
                         }
                         result
                     }
-                    // Matrix multiply: Tensor<F, [.., M, K]> @@ Tensor<F, [K, N]> → Tensor<F, [.., M, N]>
+                    // Matrix multiply shape algebra:
+                    //   Tensor<D, [.., M, K]> @@ Tensor<D, [K, N]> → Tensor<D, [.., M, N]>
+                    //
+                    // When an operand is an unresolved type variable, we constrain
+                    // it to a 2D tensor with fresh dimension variables so that the
+                    // shape algebra can propagate dimension information.
                     BinOp::MatMul => {
                         let lt_resolved = self.subst.deep_resolve(&lt);
                         let rt_resolved = self.subst.deep_resolve(&rt);
-                        match (&lt_resolved, &rt_resolved) {
-                            (
-                                Type::Tensor {
-                                    dtype: a_dtype,
-                                    shape: a_shape,
-                                },
-                                Type::Tensor {
-                                    dtype: b_dtype,
-                                    shape: b_shape,
-                                },
-                            ) => {
-                                // dtypes must match
-                                self.unify(a_dtype, b_dtype, expr.span);
-                                // a must be at least 2D, b must be exactly 2D
-                                if a_shape.len() < 2 {
-                                    self.errors.push(TypeError {
-                                        message: format!(
-                                            "Left operand of @@ must have at least 2 dimensions, got {}",
-                                            a_shape.len()
-                                        ),
-                                        span: left.span,
-                                    });
-                                    return lt;
-                                }
-                                if b_shape.len() != 2 {
-                                    self.errors.push(TypeError {
-                                        message: format!(
-                                            "Right operand of @@ must have exactly 2 dimensions, got {}",
-                                            b_shape.len()
-                                        ),
-                                        span: right.span,
-                                    });
-                                    return lt;
-                                }
-                                // Inner dimensions must match: a[.., M, K] @@ b[K, N]
-                                let a_inner = &a_shape[a_shape.len() - 1]; // K
-                                let b_outer = &b_shape[0]; // K
-                                if let Err(msg) = self.subst.unify_dim(a_inner, b_outer) {
-                                    self.errors.push(TypeError {
-                                        message: format!("Matrix multiply shape error: {}", msg),
-                                        span: expr.span,
-                                    });
-                                }
-                                // Result: [.., M, N]
-                                let mut result_shape: Vec<DimExprType> =
-                                    a_shape[..a_shape.len() - 1].to_vec();
-                                result_shape.push(b_shape[1].clone());
-                                Type::Tensor {
-                                    dtype: a_dtype.clone(),
-                                    shape: result_shape,
-                                }
+
+                        // Ensure left operand is a tensor (constrain Var → Tensor).
+                        let lt_tensor = match &lt_resolved {
+                            Type::Tensor { .. } => lt_resolved.clone(),
+                            Type::Var(_) => {
+                                let dtype = self.subst.fresh_var();
+                                let d1 = self.subst.fresh_dim_var();
+                                let d2 = self.subst.fresh_dim_var();
+                                let tensor = Type::Tensor {
+                                    dtype: Box::new(dtype),
+                                    shape: vec![d1, d2],
+                                };
+                                self.unify(&lt, &tensor, left.span);
+                                tensor
                             }
-                            // If either isn't a resolved tensor yet, use fresh vars
                             _ => {
-                                if !matches!(lt_resolved, Type::Var(_))
-                                    && !matches!(lt_resolved, Type::Tensor { .. })
-                                {
-                                    self.errors.push(TypeError {
-                                        message: format!(
-                                            "Operator @@ requires tensor operands, got {}",
-                                            lt_resolved
-                                        ),
-                                        span: expr.span,
-                                    });
-                                }
-                                self.subst.fresh_var()
+                                self.errors.push(TypeError {
+                                    message: format!(
+                                        "Left operand of @@ must be a tensor, got {}",
+                                        lt_resolved
+                                    ),
+                                    span: left.span,
+                                });
+                                return self.subst.fresh_var();
                             }
+                        };
+
+                        // Ensure right operand is a tensor (constrain Var → Tensor).
+                        let rt_tensor = match &rt_resolved {
+                            Type::Tensor { .. } => rt_resolved.clone(),
+                            Type::Var(_) => {
+                                let dtype = self.subst.fresh_var();
+                                let d1 = self.subst.fresh_dim_var();
+                                let d2 = self.subst.fresh_dim_var();
+                                let tensor = Type::Tensor {
+                                    dtype: Box::new(dtype),
+                                    shape: vec![d1, d2],
+                                };
+                                self.unify(&rt, &tensor, right.span);
+                                tensor
+                            }
+                            _ => {
+                                self.errors.push(TypeError {
+                                    message: format!(
+                                        "Right operand of @@ must be a tensor, got {}",
+                                        rt_resolved
+                                    ),
+                                    span: right.span,
+                                });
+                                return self.subst.fresh_var();
+                            }
+                        };
+
+                        // Extract dtype and shape from both tensor operands.
+                        let (a_dtype, a_shape) = match &lt_tensor {
+                            Type::Tensor { dtype, shape } => (dtype.clone(), shape.clone()),
+                            _ => unreachable!(),
+                        };
+                        let (b_dtype, b_shape) = match &rt_tensor {
+                            Type::Tensor { dtype, shape } => (dtype.clone(), shape.clone()),
+                            _ => unreachable!(),
+                        };
+
+                        // dtypes must match.
+                        self.unify(&a_dtype, &b_dtype, expr.span);
+
+                        // Rank checks: LHS >= 2D, RHS == 2D.
+                        if a_shape.len() < 2 {
+                            self.errors.push(TypeError {
+                                message: format!(
+                                    "Left operand of @@ must have at least 2 dimensions, got {}",
+                                    a_shape.len()
+                                ),
+                                span: left.span,
+                            });
+                            return lt_tensor;
+                        }
+                        if b_shape.len() != 2 {
+                            self.errors.push(TypeError {
+                                message: format!(
+                                    "Right operand of @@ must have exactly 2 dimensions, got {}",
+                                    b_shape.len()
+                                ),
+                                span: right.span,
+                            });
+                            return lt_tensor;
+                        }
+
+                        // Inner dimensions must match: a[.., M, K] @@ b[K, N].
+                        let a_inner = &a_shape[a_shape.len() - 1]; // K
+                        let b_outer = &b_shape[0]; // K
+                        if let Err(msg) = self.subst.unify_dim(a_inner, b_outer) {
+                            self.errors.push(TypeError {
+                                message: format!("Matrix multiply shape error: {}", msg),
+                                span: expr.span,
+                            });
+                        }
+
+                        // Result: Tensor<D, [.., M, N]>
+                        let mut result_shape: Vec<DimExprType> =
+                            a_shape[..a_shape.len() - 1].to_vec();
+                        result_shape.push(b_shape[1].clone());
+                        Type::Tensor {
+                            dtype: a_dtype,
+                            shape: result_shape,
                         }
                     }
 
@@ -1990,6 +2052,137 @@ let x = true && false
 let y = true || false
 println(x)
 println(y)
+"#,
+        );
+    }
+
+    // ── Type parameter fresh vars (#3) ────────────────────────────
+
+    #[test]
+    fn test_distinct_type_params_are_independent() {
+        // Before the fix, T and U both mapped to Type::Var(0), so they
+        // were the SAME type. This meant f(1, "hello") would fail because
+        // both args were constrained to the same type.
+        //
+        // After the fix, T and U get distinct fresh vars, so the second
+        // arg is independent from the first.
+        check_ok(
+            r#"
+fn first(x: T, y: U) -> T { x }
+first(1, "hello")
+"#,
+        );
+    }
+
+    #[test]
+    fn test_same_type_param_name_unifies() {
+        // Same unknown type name used twice should refer to the same type.
+        check_ok(
+            r#"
+fn identity(x: T) -> T { x }
+"#,
+        );
+    }
+
+    #[test]
+    fn test_type_params_scoped_to_function() {
+        // T in fn f and T in fn g should be independent.
+        check_ok(
+            r#"
+fn f(x: T) -> T { x }
+fn g(y: T) -> T { y }
+let a = f(42)
+let b = g("hello")
+"#,
+        );
+    }
+
+    // ── Matmul shape algebra (#7) ─────────────────────────────────
+
+    #[test]
+    fn test_matmul_with_dim_vars() {
+        // Tensor<Float, [M, K]> @@ Tensor<Float, [K, N]> should type-check.
+        // K is shared between both annotations (same dim var).
+        check_ok(
+            r#"
+fn matmul(a: Tensor<Float, [M, K]>, b: Tensor<Float, [K, N]>) -> Tensor<Float, [M, N]> {
+    a @@ b
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_matmul_literal_dims_match() {
+        // Tensor<Float, [3, 4]> @@ Tensor<Float, [4, 5]> → Tensor<Float, [3, 5]>
+        check_ok(
+            r#"
+fn matmul(a: Tensor<Float, [3, 4]>, b: Tensor<Float, [4, 5]>) -> Tensor<Float, [3, 5]> {
+    a @@ b
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_matmul_literal_dims_mismatch() {
+        // Inner dims 4 vs 5 should fail.
+        let errors = check_err(
+            r#"
+fn matmul(a: Tensor<Float, [3, 4]>, b: Tensor<Float, [5, 6]>) -> Tensor<Float, [3, 6]> {
+    a @@ b
+}
+"#,
+        );
+        assert!(
+            errors.iter().any(|e| e.message.contains("shape")),
+            "Expected shape mismatch error, got: {:?}",
+            errors
+        );
+    }
+
+    #[test]
+    fn test_matmul_wrong_result_literal_dims() {
+        // a @@ b with [3,4] @@ [4,5] produces [3,5], but annotation says [3,4].
+        // Literal dims 5 vs 4 cannot unify.
+        let errors = check_err(
+            r#"
+fn bad(a: Tensor<Float, [3, 4]>, b: Tensor<Float, [4, 5]>) -> Tensor<Float, [3, 4]> {
+    a @@ b
+}
+"#,
+        );
+        assert!(
+            errors.iter().any(|e| e.message.contains("mismatch") || e.message.contains("shape")),
+            "Expected shape mismatch error, got: {:?}",
+            errors
+        );
+    }
+
+    #[test]
+    fn test_matmul_non_tensor_operand() {
+        let errors = check_err(
+            r#"
+fn bad(a: Int, b: Int) -> Int {
+    a @@ b
+}
+"#,
+        );
+        assert!(
+            errors.iter().any(|e| e.message.contains("tensor")),
+            "Expected tensor-required error, got: {:?}",
+            errors
+        );
+    }
+
+    #[test]
+    fn test_matmul_batched_lhs() {
+        // Batched: Tensor<Float, [B, M, K]> @@ Tensor<Float, [K, N]> → Tensor<Float, [B, M, N]>
+        check_ok(
+            r#"
+fn batched_matmul(a: Tensor<Float, [B, M, K]>, b: Tensor<Float, [K, N]>) -> Tensor<Float, [B, M, N]> {
+    a @@ b
+}
 "#,
         );
     }
