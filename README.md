@@ -18,7 +18,8 @@ graph LR
     A[Source .adam] --> B[Lexer]
     B --> C[Parser]
     C --> D[Type Checker]
-    D --> E[Codegen]
+    D --> D2[Autograd]
+    D2 --> E[Codegen]
     E --> F[Bytecode .adamb]
     F --> G[Virtual Machine]
     G --> H[Output]
@@ -32,7 +33,7 @@ graph LR
 
 | Component | Language | Description |
 |-----------|----------|-------------|
-| **Compiler** | Rust | Lexer, Pratt parser, HM type inference, bytecode codegen |
+| **Compiler** | Rust | Lexer, Pratt parser, HM type inference, autograd, bytecode codegen |
 | **VM** | C | NaN-boxed values, computed goto dispatch, tri-color GC |
 | **Tooling** | Python | CLI runner, interactive REPL, test framework, benchmarks |
 | **Editor** | TypeScript | LSP server, browser playground with Monaco editor |
@@ -93,6 +94,41 @@ for x in numbers {
 }
 println(total)  // 150
 ```
+
+### Shape-Typed Tensors
+
+Built-in tensor operations with compile-time dimension checking:
+
+```
+// Dimension variables (N) are checked at compile time
+fn predict(images: Tensor<Float, [N, 784]>) -> Tensor<Float, [N, 10]> {
+    images @@ weights + bias   // [N,784] @@ [784,10] -> [N,10]
+}
+
+// Matrix multiply, element-wise ops, and tensor utilities
+let a = tensor_from_array([1, 2, 3, 4, 5, 6], [2, 3])
+let b = tensor_ones([3, 2])
+let c = a @@ b         // matrix multiply
+let d = c + c          // element-wise add
+println(tensor_sum(d)) // reduce to scalar
+```
+
+### Automatic Differentiation
+
+Compile-time reverse-mode AD via AST source transformation:
+
+```
+fn loss(x) {
+    let h = x @@ w1
+    tensor_sum(h @@ w2)
+}
+
+// grad() is a compiler intrinsic -- no runtime tape
+let grad_loss = grad(loss)
+let grads = grad_loss(input)
+```
+
+No shipped language combines shape-dependent types, compiler-pass AD, and simplicity. Adam achieves this by restricting dimension variables to integers (not full dependent types) and limiting AD to a tractable set of tensor operations.
 
 ### Expression-Oriented
 
@@ -158,6 +194,7 @@ adam-lang/
 │       ├── lexer.rs         # Tokenizer with span tracking
 │       ├── parser.rs        # Pratt parser + recursive descent
 │       ├── types.rs         # Hindley-Milner type inference
+│       ├── autograd.rs      # Reverse-mode AD via AST transformation
 │       ├── compiler.rs      # AST to bytecode compilation
 │       ├── bytecode.rs      # Bytecode format and serialization
 │       ├── ast.rs           # AST node definitions
@@ -198,3 +235,5 @@ adam-lang/
 - [Language Reference](docs/language-spec.md) -- grammar, types, and semantics
 - [VM Internals](docs/vm-internals.md) -- NaN boxing, GC, dispatch loop
 - [Compiler Pipeline](docs/compiler-pipeline.md) -- lexer, parser, type inference, codegen
+- [Tensor Types](docs/tensor-types.md) -- shape-dependent type system for tensors
+- [Autograd](docs/autograd.md) -- compile-time reverse-mode automatic differentiation

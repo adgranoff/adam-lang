@@ -200,6 +200,17 @@ impl<'src> Lexer<'src> {
             // String literals
             '"' => self.string(),
 
+            '@' => {
+                if self.match_char('@') {
+                    self.add_token(TokenKind::AtAt);
+                } else {
+                    self.errors.push(format!(
+                        "Unexpected '@' at byte {}. Did you mean '@@'?",
+                        self.start
+                    ));
+                }
+            }
+
             // Number literals
             c if c.is_ascii_digit() => self.number(c),
 

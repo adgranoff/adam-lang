@@ -70,6 +70,9 @@ fn main() {
                 eprintln!("warning: {}", err);
             }
 
+            // Run autograd pass — transforms grad(f) calls into gradient functions.
+            let program = adam_compiler::autograd::transform(&program);
+
             let bytecode = match adam_compiler::compiler::compile(&program) {
                 Ok(b) => b,
                 Err(e) => {

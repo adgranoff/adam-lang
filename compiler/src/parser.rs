@@ -307,8 +307,10 @@ impl Parser {
                 // Addition/subtraction
                 TokenKind::Plus | TokenKind::Minus => (7, Assoc::Left),
 
-                // Multiplication/division
-                TokenKind::Star | TokenKind::Slash | TokenKind::Percent => (8, Assoc::Left),
+                // Multiplication/division/matmul
+                TokenKind::Star | TokenKind::Slash | TokenKind::Percent | TokenKind::AtAt => {
+                    (8, Assoc::Left)
+                }
 
                 // Power (right-associative)
                 TokenKind::StarStar => (9, Assoc::Right),
@@ -509,6 +511,7 @@ impl Parser {
             | TokenKind::Slash
             | TokenKind::Percent
             | TokenKind::StarStar
+            | TokenKind::AtAt
             | TokenKind::EqEq
             | TokenKind::BangEq
             | TokenKind::Lt
@@ -524,6 +527,7 @@ impl Parser {
                     TokenKind::Slash => BinOp::Div,
                     TokenKind::Percent => BinOp::Mod,
                     TokenKind::StarStar => BinOp::Pow,
+                    TokenKind::AtAt => BinOp::MatMul,
                     TokenKind::EqEq => BinOp::Eq,
                     TokenKind::BangEq => BinOp::Neq,
                     TokenKind::Lt => BinOp::Lt,
@@ -892,9 +896,26 @@ impl Parser {
             });
         }
 
-        // Named type, possibly generic: Int, Option<T>
+        // Named type, possibly generic: Int, Option<T>, Tensor<Float, [N, 784]>
         let name = self.expect_identifier()?;
         if self.match_token(TokenKind::Lt) {
+            // Special handling for Tensor<DType, [dims]>
+            if name == "Tensor" {
+                let dtype = self.parse_type()?;
+                self.expect(TokenKind::Comma)?;
+                self.expect(TokenKind::LBracket)?;
+                let dims = self.parse_dim_list()?;
+                self.expect(TokenKind::RBracket)?;
+                let end = self.current_span();
+                self.expect(TokenKind::Gt)?;
+                return Ok(TypeExpr {
+                    kind: TypeExprKind::TensorType {
+                        dtype: Box::new(dtype),
+                        dims,
+                    },
+                    span: start.merge(end),
+                });
+            }
             let args = self.comma_separated(|p| p.parse_type())?;
             let end = self.current_span();
             self.expect(TokenKind::Gt)?;
@@ -932,6 +953,24 @@ impl Parser {
                 type_ann,
                 span,
             })
+        })
+    }
+
+    /// Parse a comma-separated list of dimension expressions: integers or identifiers.
+    fn parse_dim_list(&mut self) -> Result<Vec<DimExpr>, String> {
+        if self.check(TokenKind::RBracket) {
+            return Ok(vec![]);
+        }
+        self.comma_separated(|p| {
+            let token = p.advance_token();
+            match token.kind {
+                TokenKind::Int(n) => Ok(DimExpr::Lit(n)),
+                TokenKind::Identifier(name) => Ok(DimExpr::Var(name)),
+                _ => Err(format!(
+                    "Expected dimension (integer or variable), found '{}' at byte {}",
+                    token.kind, token.span.start
+                )),
+            }
         })
     }
 

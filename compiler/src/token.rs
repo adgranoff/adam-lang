@@ -75,6 +75,7 @@ pub enum TokenKind {
     Or,         // ||
     Pipe,       // |
     PipeGt,     // |>
+    AtAt,       // @@
     Arrow,      // ->
     FatArrow,   // =>
     Dot,        // .
@@ -149,6 +150,7 @@ impl fmt::Display for TokenKind {
             TokenKind::Or => write!(f, "||"),
             TokenKind::Pipe => write!(f, "|"),
             TokenKind::PipeGt => write!(f, "|>"),
+            TokenKind::AtAt => write!(f, "@@"),
             TokenKind::Arrow => write!(f, "->"),
             TokenKind::FatArrow => write!(f, "=>"),
             TokenKind::Dot => write!(f, "."),

@@ -30,6 +30,7 @@
 //! ```
 
 pub mod ast;
+pub mod autograd;
 pub mod bytecode;
 pub mod compiler;
 pub mod errors;

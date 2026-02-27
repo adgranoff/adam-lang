@@ -202,6 +202,25 @@ ObjVariant* adam_new_variant(VM* vm, ObjString* tag, Value payload) {
     return variant;
 }
 
+/* ── Tensor objects ────────────────────────────────────────────────── */
+
+ObjTensor* adam_new_tensor(VM* vm, int ndim, int* shape) {
+    ObjTensor* tensor = ALLOCATE_OBJ(vm, ObjTensor, OBJ_TENSOR);
+    tensor->ndim = ndim;
+    tensor->shape = ALLOCATE(vm, int, ndim);
+    int count = 1;
+    for (int i = 0; i < ndim; i++) {
+        tensor->shape[i] = shape[i];
+        count *= shape[i];
+    }
+    tensor->count = count;
+    tensor->data = ALLOCATE(vm, double, count);
+    for (int i = 0; i < count; i++) {
+        tensor->data[i] = 0.0;
+    }
+    return tensor;
+}
+
 /* ── Object deallocation ───────────────────────────────────────────── */
 
 void adam_free_object(VM* vm, Obj* object) {
@@ -251,6 +270,13 @@ void adam_free_object(VM* vm, Obj* object) {
     case OBJ_VARIANT:
         FREE(vm, ObjVariant, object);
         break;
+    case OBJ_TENSOR: {
+        ObjTensor* tensor = (ObjTensor*)object;
+        FREE_ARRAY(vm, int, tensor->shape, tensor->ndim);
+        FREE_ARRAY(vm, double, tensor->data, tensor->count);
+        FREE(vm, ObjTensor, object);
+        break;
+    }
     }
 }
 
@@ -310,6 +336,24 @@ void adam_print_object(Value value) {
         ObjVariant* v = AS_VARIANT(value);
         printf("%s(", v->tag->chars);
         adam_print_value(v->payload);
+        printf(")");
+        break;
+    }
+    case OBJ_TENSOR: {
+        ObjTensor* t = AS_TENSOR(value);
+        printf("Tensor<[");
+        for (int i = 0; i < t->ndim; i++) {
+            if (i > 0) printf(", ");
+            printf("%d", t->shape[i]);
+        }
+        printf("]>(");
+        /* Print first few elements for brevity */
+        int limit = t->count < 8 ? t->count : 8;
+        for (int i = 0; i < limit; i++) {
+            if (i > 0) printf(", ");
+            printf("%g", t->data[i]);
+        }
+        if (t->count > 8) printf(", ...");
         printf(")");
         break;
     }

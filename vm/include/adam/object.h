@@ -39,6 +39,7 @@ typedef enum {
     OBJ_ARRAY,
     OBJ_STRUCT,
     OBJ_VARIANT,
+    OBJ_TENSOR,
 } ObjType;
 
 /* ── Base object header ────────────────────────────────────────────── */
@@ -59,6 +60,7 @@ struct Obj {
 #define IS_ARRAY(value)     (IS_OBJ(value) && OBJ_TYPE(value) == OBJ_ARRAY)
 #define IS_STRUCT(value)    (IS_OBJ(value) && OBJ_TYPE(value) == OBJ_STRUCT)
 #define IS_VARIANT(value)   (IS_OBJ(value) && OBJ_TYPE(value) == OBJ_VARIANT)
+#define IS_TENSOR(value)    (IS_OBJ(value) && OBJ_TYPE(value) == OBJ_TENSOR)
 
 /* ── Concrete object types ─────────────────────────────────────────── */
 
@@ -162,6 +164,19 @@ typedef struct {
     Value payload;
 } ObjVariant;
 
+/*
+ * ObjTensor — Multi-dimensional array of doubles.
+ * Row-major layout. Shape is stored alongside data so the VM can
+ * perform dimension checks at runtime for untyped tensor code.
+ */
+typedef struct {
+    Obj obj;
+    int ndim;           /* Number of dimensions */
+    int* shape;         /* Shape array [d0, d1, ..., d_{ndim-1}] */
+    int count;          /* Total element count (product of shape) */
+    double* data;       /* Flat row-major data array */
+} ObjTensor;
+
 /* ── Extraction macros ─────────────────────────────────────────────── */
 
 #define AS_STRING(value)    ((ObjString*)AS_OBJ(value))
@@ -173,6 +188,7 @@ typedef struct {
 #define AS_ARRAY(value)     ((ObjArray*)AS_OBJ(value))
 #define AS_STRUCT(value)    ((ObjStruct*)AS_OBJ(value))
 #define AS_VARIANT(value)   ((ObjVariant*)AS_OBJ(value))
+#define AS_TENSOR(value)    ((ObjTensor*)AS_OBJ(value))
 
 /* ── Allocation functions ──────────────────────────────────────────── */
 
@@ -186,5 +202,6 @@ ObjArray*    adam_new_array(VM* vm);
 void         adam_array_push(VM* vm, ObjArray* array, Value value);
 ObjStruct*   adam_new_struct(VM* vm, ObjString* name, int field_count);
 ObjVariant*  adam_new_variant(VM* vm, ObjString* tag, Value payload);
+ObjTensor*   adam_new_tensor(VM* vm, int ndim, int* shape);
 void         adam_free_object(VM* vm, Obj* object);
 void         adam_print_object(Value value);

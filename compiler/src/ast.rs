@@ -258,6 +258,7 @@ pub enum BinOp {
     Div,
     Mod,
     Pow,
+    MatMul, // @@
     Eq,
     Neq,
     Lt,
@@ -302,4 +303,20 @@ pub enum TypeExprKind {
 
     /// Array type: `[Int]`
     Array(Box<TypeExpr>),
+
+    /// Tensor type: `Tensor<Float, [784, N, 10]>`
+    TensorType {
+        dtype: Box<TypeExpr>,
+        dims: Vec<DimExpr>,
+    },
+}
+
+/// A dimension expression in a tensor type annotation.
+/// Restricted form of dependent types — integer literals or dimension variables.
+#[derive(Debug, Clone)]
+pub enum DimExpr {
+    /// Known dimension: `784`, `10`
+    Lit(i64),
+    /// Dimension variable: `N`, `M` (uppercase identifiers)
+    Var(String),
 }

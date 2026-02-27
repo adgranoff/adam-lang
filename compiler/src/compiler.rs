@@ -614,6 +614,7 @@ impl Compiler {
                     BinOp::Div => self.emit_op(Op::Div),
                     BinOp::Mod => self.emit_op(Op::Mod),
                     BinOp::Pow => self.emit_op(Op::Pow),
+                    BinOp::MatMul => self.emit_op(Op::TensorMatMul),
                     BinOp::Eq => self.emit_op(Op::Eq),
                     BinOp::Neq => self.emit_op(Op::Neq),
                     BinOp::Lt => self.emit_op(Op::Lt),

@@ -67,8 +67,25 @@ pub enum Type {
         name: String,
         variants: Vec<(String, Vec<Type>)>,
     },
+    /// Shape-typed tensor: `Tensor<Float, [784, N, 10]>`.
+    /// dtype is Float or Int, shape is a list of dimension expressions.
+    Tensor {
+        dtype: Box<Type>,
+        shape: Vec<DimExprType>,
+    },
     /// Type variable — a placeholder for an unknown type. The `u32`
     /// is a unique ID into the substitution table.
+    Var(u32),
+}
+
+/// Dimension expression in the type system.
+/// Restricted dependent types — integer constants or unification variables.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DimExprType {
+    /// Known dimension: `784`, `10`
+    Lit(i64),
+    /// Dimension variable (unification variable for dimensions).
+    /// Uses the same ID space as type variables for simplicity.
     Var(u32),
 }
 
@@ -93,7 +110,26 @@ impl fmt::Display for Type {
             }
             Type::Struct { name, .. } => write!(f, "{}", name),
             Type::Adt { name, .. } => write!(f, "{}", name),
+            Type::Tensor { dtype, shape } => {
+                write!(f, "Tensor<{}, [", dtype)?;
+                for (i, dim) in shape.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", dim)?;
+                }
+                write!(f, "]>")
+            }
             Type::Var(id) => write!(f, "?{}", id),
+        }
+    }
+}
+
+impl fmt::Display for DimExprType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DimExprType::Lit(n) => write!(f, "{}", n),
+            DimExprType::Var(id) => write!(f, "?d{}", id),
         }
     }
 }
@@ -149,6 +185,8 @@ impl fmt::Display for TypeError {
 struct Substitution {
     /// Map from type variable ID → its binding (if any).
     bindings: HashMap<u32, Type>,
+    /// Map from dimension variable ID → its dimension binding.
+    dim_bindings: HashMap<u32, DimExprType>,
     /// Counter for generating fresh type variable IDs.
     next_id: u32,
 }
@@ -157,6 +195,7 @@ impl Substitution {
     fn new() -> Self {
         Substitution {
             bindings: HashMap::new(),
+            dim_bindings: HashMap::new(),
             next_id: 0,
         }
     }
@@ -166,6 +205,13 @@ impl Substitution {
         let id = self.next_id;
         self.next_id += 1;
         Type::Var(id)
+    }
+
+    /// Create a fresh dimension variable.
+    fn fresh_dim_var(&mut self) -> DimExprType {
+        let id = self.next_id;
+        self.next_id += 1;
+        DimExprType::Var(id)
     }
 
     /// Walk the substitution chain to find the most resolved form of a type.
@@ -220,8 +266,17 @@ impl Substitution {
                     })
                     .collect(),
             },
+            Type::Tensor { dtype, shape } => Type::Tensor {
+                dtype: Box::new(self.deep_resolve(dtype)),
+                shape: shape.iter().map(|d| self.deep_resolve_dim(d)).collect(),
+            },
             _ => ty.clone(),
         }
+    }
+
+    /// Resolve a dimension expression through the dim_bindings.
+    fn deep_resolve_dim(&self, dim: &DimExprType) -> DimExprType {
+        self.resolve_dim(dim)
     }
 
     /// Unify two types: make them equal by adding substitution bindings.
@@ -313,8 +368,79 @@ impl Substitution {
                 Ok(())
             }
 
+            // Tensor types: unify dtypes and each dimension.
+            (
+                Type::Tensor {
+                    dtype: a_dtype,
+                    shape: a_shape,
+                },
+                Type::Tensor {
+                    dtype: b_dtype,
+                    shape: b_shape,
+                },
+            ) => {
+                self.unify(a_dtype, b_dtype)?;
+                if a_shape.len() != b_shape.len() {
+                    return Err(format!(
+                        "Tensor rank mismatch: expected {} dimensions, got {}",
+                        a_shape.len(),
+                        b_shape.len()
+                    ));
+                }
+                for (ad, bd) in a_shape.iter().zip(b_shape.iter()) {
+                    self.unify_dim(ad, bd)?;
+                }
+                Ok(())
+            }
+
             // Everything else is a mismatch.
             _ => Err(format!("Type mismatch: expected {}, got {}", a, b)),
+        }
+    }
+
+    /// Unify two dimension expressions.
+    fn unify_dim(&mut self, a: &DimExprType, b: &DimExprType) -> Result<(), String> {
+        match (a, b) {
+            (DimExprType::Lit(x), DimExprType::Lit(y)) => {
+                if x == y {
+                    Ok(())
+                } else {
+                    Err(format!("Tensor shape mismatch: dimension {} vs {}", x, y))
+                }
+            }
+            // Dim variables unify with anything — bind via the same substitution
+            // table, using a special sentinel type to store the dim binding.
+            (DimExprType::Var(id), other) | (other, DimExprType::Var(id)) => {
+                if let DimExprType::Var(other_id) = other {
+                    if id == other_id {
+                        return Ok(());
+                    }
+                }
+                // Store dim binding: we encode DimExprType::Lit(n) as Type::Int
+                // in the substitution table won't work cleanly. Instead, we use
+                // a separate dim_bindings map.
+                self.bind_dim(*id, other.clone());
+                Ok(())
+            }
+        }
+    }
+
+    /// Bind a dimension variable to a dimension expression.
+    fn bind_dim(&mut self, id: u32, dim: DimExprType) {
+        self.dim_bindings.insert(id, dim);
+    }
+
+    /// Resolve a dimension variable through dim_bindings.
+    fn resolve_dim(&self, dim: &DimExprType) -> DimExprType {
+        match dim {
+            DimExprType::Var(id) => {
+                if let Some(bound) = self.dim_bindings.get(id) {
+                    self.resolve_dim(bound)
+                } else {
+                    dim.clone()
+                }
+            }
+            DimExprType::Lit(_) => dim.clone(),
         }
     }
 
@@ -340,6 +466,7 @@ impl Substitution {
             Type::Adt { variants, .. } => variants
                 .iter()
                 .any(|(_, ts)| ts.iter().any(|t| self.occurs(id, t))),
+            Type::Tensor { dtype, .. } => self.occurs(id, dtype),
             _ => false,
         }
     }
@@ -376,6 +503,16 @@ impl Substitution {
                 for (_, ts) in variants {
                     for t in ts {
                         self.collect_free_vars(t, out);
+                    }
+                }
+            }
+            Type::Tensor { dtype, shape } => {
+                self.collect_free_vars(dtype, out);
+                for dim in shape {
+                    if let DimExprType::Var(id) = dim {
+                        if !self.dim_bindings.contains_key(id) && !out.contains(id) {
+                            out.push(*id);
+                        }
                     }
                 }
             }
@@ -469,6 +606,8 @@ pub struct TypeChecker {
     structs: HashMap<String, StructDef>,
     /// Declared ADT types for variant constructors and match.
     adts: HashMap<String, AdtDef>,
+    /// Mapping from dimension variable names (N, M, K) to their IDs.
+    dim_var_names: HashMap<String, u32>,
 }
 
 impl TypeChecker {
@@ -479,6 +618,7 @@ impl TypeChecker {
             errors: Vec::new(),
             structs: HashMap::new(),
             adts: HashMap::new(),
+            dim_var_names: HashMap::new(),
         };
         // Register built-in functions.
         tc.register_builtins();
@@ -544,6 +684,117 @@ impl TypeChecker {
                 params: vec![],
                 ret: Box::new(Type::Float),
             }),
+        );
+
+        // Tensor builtins — use polymorphic types with fresh vars.
+        // tensor_zeros: [Int] → Tensor (shape determined at runtime)
+        let tz = self.subst.fresh_var();
+        let tz_id = match &tz { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_zeros".into(),
+            Scheme {
+                vars: vec![tz_id],
+                ty: Type::Fn {
+                    params: vec![Type::Array(Box::new(Type::Int))],
+                    ret: Box::new(tz),
+                },
+            },
+        );
+        let to = self.subst.fresh_var();
+        let to_id = match &to { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_ones".into(),
+            Scheme {
+                vars: vec![to_id],
+                ty: Type::Fn {
+                    params: vec![Type::Array(Box::new(Type::Int))],
+                    ret: Box::new(to),
+                },
+            },
+        );
+        let tr = self.subst.fresh_var();
+        let tr_id = match &tr { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_randn".into(),
+            Scheme {
+                vars: vec![tr_id],
+                ty: Type::Fn {
+                    params: vec![Type::Array(Box::new(Type::Int))],
+                    ret: Box::new(tr),
+                },
+            },
+        );
+        // tensor_sum: Tensor → Float
+        let ts = self.subst.fresh_var();
+        let ts_id = match &ts { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_sum".into(),
+            Scheme {
+                vars: vec![ts_id],
+                ty: Type::Fn {
+                    params: vec![ts],
+                    ret: Box::new(Type::Float),
+                },
+            },
+        );
+        // tensor_transpose: Tensor → Tensor
+        let tt1 = self.subst.fresh_var();
+        let tt2 = self.subst.fresh_var();
+        let tt1_id = match &tt1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tt2_id = match &tt2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_transpose".into(),
+            Scheme {
+                vars: vec![tt1_id, tt2_id],
+                ty: Type::Fn {
+                    params: vec![tt1],
+                    ret: Box::new(tt2),
+                },
+            },
+        );
+        // tensor_shape: Tensor → [Int]
+        let tsh = self.subst.fresh_var();
+        let tsh_id = match &tsh { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_shape".into(),
+            Scheme {
+                vars: vec![tsh_id],
+                ty: Type::Fn {
+                    params: vec![tsh],
+                    ret: Box::new(Type::Array(Box::new(Type::Int))),
+                },
+            },
+        );
+        // tensor_reshape: (Tensor, [Int]) → Tensor
+        let trsh1 = self.subst.fresh_var();
+        let trsh2 = self.subst.fresh_var();
+        let trsh1_id = match &trsh1 { Type::Var(id) => *id, _ => unreachable!() };
+        let trsh2_id = match &trsh2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_reshape".into(),
+            Scheme {
+                vars: vec![trsh1_id, trsh2_id],
+                ty: Type::Fn {
+                    params: vec![trsh1, Type::Array(Box::new(Type::Int))],
+                    ret: Box::new(trsh2),
+                },
+            },
+        );
+        // tensor_from_array: ([Float], [Int]) → Tensor
+        let tfa = self.subst.fresh_var();
+        let tfa_id = match &tfa { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_from_array".into(),
+            Scheme {
+                vars: vec![tfa_id],
+                ty: Type::Fn {
+                    params: vec![
+                        Type::Array(Box::new(Type::Float)),
+                        Type::Array(Box::new(Type::Int)),
+                    ],
+                    ret: Box::new(tfa),
+                },
+            },
         );
     }
 
@@ -615,6 +866,10 @@ impl TypeChecker {
                     })
                     .collect(),
             },
+            Type::Tensor { dtype, shape } => Type::Tensor {
+                dtype: Box::new(self.apply_mapping(dtype, mapping)),
+                shape: shape.clone(), // Dim vars are separate from type vars
+            },
             _ => ty.clone(),
         }
     }
@@ -632,7 +887,7 @@ impl TypeChecker {
 
     // ── Convert source type annotations to Types ────────────────────
 
-    fn resolve_type_expr(&self, texpr: &TypeExpr) -> Type {
+    fn resolve_type_expr(&mut self, texpr: &TypeExpr) -> Type {
         match &texpr.kind {
             TypeExprKind::Named(name) => match name.as_str() {
                 "Int" => Type::Int,
@@ -683,6 +938,40 @@ impl TypeChecker {
                     }
                 } else {
                     Type::Nil // Placeholder for unresolved generics.
+                }
+            }
+            TypeExprKind::TensorType { dtype, dims } => {
+                let dtype_type = self.resolve_type_expr(dtype);
+                let shape: Vec<DimExprType> = dims
+                    .iter()
+                    .map(|d| self.resolve_dim_expr(d))
+                    .collect();
+                Type::Tensor {
+                    dtype: Box::new(dtype_type),
+                    shape,
+                }
+            }
+        }
+    }
+
+    /// Convert a source-level DimExpr to a type-level DimExprType.
+    fn resolve_dim_expr(&mut self, dim: &crate::ast::DimExpr) -> DimExprType {
+        match dim {
+            crate::ast::DimExpr::Lit(n) => DimExprType::Lit(*n),
+            crate::ast::DimExpr::Var(name) => {
+                // Look up or create a dimension variable for this name.
+                // We use the dim_var_names map to reuse the same ID for
+                // the same name within a scope.
+                if let Some(&id) = self.dim_var_names.get(name) {
+                    DimExprType::Var(id)
+                } else {
+                    let dim_var = self.subst.fresh_dim_var();
+                    if let DimExprType::Var(id) = dim_var {
+                        self.dim_var_names.insert(name.clone(), id);
+                        dim_var
+                    } else {
+                        unreachable!()
+                    }
                 }
             }
         }
@@ -900,6 +1189,80 @@ impl TypeChecker {
                         }
                         result
                     }
+                    // Matrix multiply: Tensor<F, [.., M, K]> @@ Tensor<F, [K, N]> → Tensor<F, [.., M, N]>
+                    BinOp::MatMul => {
+                        let lt_resolved = self.subst.deep_resolve(&lt);
+                        let rt_resolved = self.subst.deep_resolve(&rt);
+                        match (&lt_resolved, &rt_resolved) {
+                            (
+                                Type::Tensor {
+                                    dtype: a_dtype,
+                                    shape: a_shape,
+                                },
+                                Type::Tensor {
+                                    dtype: b_dtype,
+                                    shape: b_shape,
+                                },
+                            ) => {
+                                // dtypes must match
+                                self.unify(a_dtype, b_dtype, expr.span);
+                                // a must be at least 2D, b must be exactly 2D
+                                if a_shape.len() < 2 {
+                                    self.errors.push(TypeError {
+                                        message: format!(
+                                            "Left operand of @@ must have at least 2 dimensions, got {}",
+                                            a_shape.len()
+                                        ),
+                                        span: left.span,
+                                    });
+                                    return lt;
+                                }
+                                if b_shape.len() != 2 {
+                                    self.errors.push(TypeError {
+                                        message: format!(
+                                            "Right operand of @@ must have exactly 2 dimensions, got {}",
+                                            b_shape.len()
+                                        ),
+                                        span: right.span,
+                                    });
+                                    return lt;
+                                }
+                                // Inner dimensions must match: a[.., M, K] @@ b[K, N]
+                                let a_inner = &a_shape[a_shape.len() - 1]; // K
+                                let b_outer = &b_shape[0]; // K
+                                if let Err(msg) = self.subst.unify_dim(a_inner, b_outer) {
+                                    self.errors.push(TypeError {
+                                        message: format!("Matrix multiply shape error: {}", msg),
+                                        span: expr.span,
+                                    });
+                                }
+                                // Result: [.., M, N]
+                                let mut result_shape: Vec<DimExprType> =
+                                    a_shape[..a_shape.len() - 1].to_vec();
+                                result_shape.push(b_shape[1].clone());
+                                Type::Tensor {
+                                    dtype: a_dtype.clone(),
+                                    shape: result_shape,
+                                }
+                            }
+                            // If either isn't a resolved tensor yet, use fresh vars
+                            _ => {
+                                if !matches!(lt_resolved, Type::Var(_))
+                                    && !matches!(lt_resolved, Type::Tensor { .. })
+                                {
+                                    self.errors.push(TypeError {
+                                        message: format!(
+                                            "Operator @@ requires tensor operands, got {}",
+                                            lt_resolved
+                                        ),
+                                        span: expr.span,
+                                    });
+                                }
+                                self.subst.fresh_var()
+                            }
+                        }
+                    }
+
                     BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::Pow => {
                         // Numeric only. Both sides must unify.
                         self.unify(&lt, &rt, expr.span);

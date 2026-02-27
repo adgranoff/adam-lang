@@ -274,6 +274,8 @@ static InterpretResult run(VM* vm) {
         &&op_STRUCT_NEW, &&op_STRUCT_GET, &&op_STRUCT_SET,
         &&op_MATCH,
         &&op_PRINT, &&op_POP,
+        &&op_TENSOR_MATMUL, &&op_TENSOR_ADD, &&op_TENSOR_SUB,
+        &&op_TENSOR_MUL, &&op_TENSOR_NEG,
     };
     #define DISPATCH() do { goto *dispatch_table[READ_BYTE()]; } while (0)
     #define CASE(name) op_##name
@@ -736,6 +738,144 @@ static InterpretResult run(VM* vm) {
 
     CASE(POP): {
         adam_vm_pop(vm);
+        DISPATCH();
+    }
+
+    CASE(TENSOR_MATMUL): {
+        if (!IS_TENSOR(peek(vm, 0)) || !IS_TENSOR(peek(vm, 1))) {
+            runtime_error(vm, "Operands to @@ must be tensors.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjTensor* b = AS_TENSOR(peek(vm, 0));
+        ObjTensor* a = AS_TENSOR(peek(vm, 1));
+        if (a->ndim < 2 || b->ndim < 2) {
+            runtime_error(vm, "Matrix multiply requires at least 2D tensors.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        int a_rows = a->shape[a->ndim - 2];
+        int a_cols = a->shape[a->ndim - 1];
+        int b_rows = b->shape[b->ndim - 2];
+        int b_cols = b->shape[b->ndim - 1];
+        if (a_cols != b_rows) {
+            runtime_error(vm, "Shape mismatch in @@: [..,%d,%d] @@ [%d,%d].",
+                         a_rows, a_cols, b_rows, b_cols);
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        /* Compute batch dimensions (all dims except last two in a) */
+        int batch = 1;
+        for (int i = 0; i < a->ndim - 2; i++) batch *= a->shape[i];
+        /* Result shape: a's batch dims + [a_rows, b_cols] */
+        int result_ndim = a->ndim;
+        int result_shape_buf[16]; /* Max 16 dims */
+        for (int i = 0; i < a->ndim - 2; i++) result_shape_buf[i] = a->shape[i];
+        result_shape_buf[result_ndim - 2] = a_rows;
+        result_shape_buf[result_ndim - 1] = b_cols;
+        ObjTensor* result = adam_new_tensor(vm, result_ndim, result_shape_buf);
+        adam_vm_push(vm, OBJ_VAL(result)); /* GC protection */
+        /* Naive batched matmul: for each batch, triple-loop */
+        for (int bi = 0; bi < batch; bi++) {
+            double* a_data = a->data + bi * a_rows * a_cols;
+            double* r_data = result->data + bi * a_rows * b_cols;
+            for (int i = 0; i < a_rows; i++) {
+                for (int j = 0; j < b_cols; j++) {
+                    double sum = 0.0;
+                    for (int k = 0; k < a_cols; k++) {
+                        sum += a_data[i * a_cols + k] * b->data[k * b_cols + j];
+                    }
+                    r_data[i * b_cols + j] = sum;
+                }
+            }
+        }
+        adam_vm_pop(vm);  /* Pop GC protection */
+        adam_vm_pop(vm);  /* Pop b */
+        adam_vm_pop(vm);  /* Pop a */
+        adam_vm_push(vm, OBJ_VAL(result));
+        DISPATCH();
+    }
+
+    CASE(TENSOR_ADD): {
+        if (!IS_TENSOR(peek(vm, 0)) || !IS_TENSOR(peek(vm, 1))) {
+            runtime_error(vm, "Operands to tensor add must be tensors.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjTensor* b = AS_TENSOR(peek(vm, 0));
+        ObjTensor* a = AS_TENSOR(peek(vm, 1));
+        if (a->count != b->count) {
+            runtime_error(vm, "Shape mismatch in tensor add.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+        adam_vm_push(vm, OBJ_VAL(result));
+        for (int i = 0; i < a->count; i++) {
+            result->data[i] = a->data[i] + b->data[i];
+        }
+        adam_vm_pop(vm);
+        adam_vm_pop(vm);
+        adam_vm_pop(vm);
+        adam_vm_push(vm, OBJ_VAL(result));
+        DISPATCH();
+    }
+
+    CASE(TENSOR_SUB): {
+        if (!IS_TENSOR(peek(vm, 0)) || !IS_TENSOR(peek(vm, 1))) {
+            runtime_error(vm, "Operands to tensor sub must be tensors.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjTensor* b = AS_TENSOR(peek(vm, 0));
+        ObjTensor* a = AS_TENSOR(peek(vm, 1));
+        if (a->count != b->count) {
+            runtime_error(vm, "Shape mismatch in tensor sub.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+        adam_vm_push(vm, OBJ_VAL(result));
+        for (int i = 0; i < a->count; i++) {
+            result->data[i] = a->data[i] - b->data[i];
+        }
+        adam_vm_pop(vm);
+        adam_vm_pop(vm);
+        adam_vm_pop(vm);
+        adam_vm_push(vm, OBJ_VAL(result));
+        DISPATCH();
+    }
+
+    CASE(TENSOR_MUL): {
+        if (!IS_TENSOR(peek(vm, 0)) || !IS_TENSOR(peek(vm, 1))) {
+            runtime_error(vm, "Operands to tensor mul must be tensors.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjTensor* b = AS_TENSOR(peek(vm, 0));
+        ObjTensor* a = AS_TENSOR(peek(vm, 1));
+        if (a->count != b->count) {
+            runtime_error(vm, "Shape mismatch in tensor mul.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+        adam_vm_push(vm, OBJ_VAL(result));
+        for (int i = 0; i < a->count; i++) {
+            result->data[i] = a->data[i] * b->data[i];
+        }
+        adam_vm_pop(vm);
+        adam_vm_pop(vm);
+        adam_vm_pop(vm);
+        adam_vm_push(vm, OBJ_VAL(result));
+        DISPATCH();
+    }
+
+    CASE(TENSOR_NEG): {
+        if (!IS_TENSOR(peek(vm, 0))) {
+            runtime_error(vm, "Operand to tensor neg must be a tensor.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        ObjTensor* a = AS_TENSOR(peek(vm, 0));
+        ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+        adam_vm_push(vm, OBJ_VAL(result));
+        for (int i = 0; i < a->count; i++) {
+            result->data[i] = -a->data[i];
+        }
+        adam_vm_pop(vm);
+        adam_vm_pop(vm);
+        adam_vm_push(vm, OBJ_VAL(result));
         DISPATCH();
     }
 

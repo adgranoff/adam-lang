@@ -89,6 +89,13 @@ typedef enum {
     /* I/O and stack */
     OP_PRINT,           /*                 Pop and print value                  */
     OP_POP,             /*                 Discard top of stack                 */
+
+    /* Tensor operations */
+    OP_TENSOR_MATMUL,   /*                 Pop two tensors, push matrix product */
+    OP_TENSOR_ADD,      /*                 Element-wise add                     */
+    OP_TENSOR_SUB,      /*                 Element-wise sub                     */
+    OP_TENSOR_MUL,      /*                 Element-wise mul (Hadamard)          */
+    OP_TENSOR_NEG,      /*                 Element-wise negate                  */
 } OpCode;
 
 /* ── Chunk ─────────────────────────────────────────────────────────── */

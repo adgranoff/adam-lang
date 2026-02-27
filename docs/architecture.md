@@ -9,7 +9,8 @@ graph TD
     A["Source Code (.adam)"] --> B["Lexer (Rust)"]
     B -->|Token Stream| C["Parser (Rust)"]
     C -->|AST| D["Type Checker (Rust)"]
-    D -->|Typed AST| E["Code Generator (Rust)"]
+    D -->|Typed AST| D2["Autograd Pass (Rust)"]
+    D2 -->|Transformed AST| E["Code Generator (Rust)"]
     E -->|Bytecode| F["Serializer (Rust)"]
     F --> G[".adamb File"]
     G --> H["VM Loader (C)"]
@@ -26,6 +27,7 @@ The compiler is a single-pass pipeline from source to bytecode:
 - **Lexer** (`lexer.rs`): Tokenizes source into a stream of tokens with span information for error reporting. Handles all Adam literals, operators, and keywords.
 - **Parser** (`parser.rs`): Pratt parser for expressions (precedence climbing handles operator priority and associativity) combined with recursive descent for statements and declarations. Produces a concrete AST.
 - **Type Checker** (`types.rs`): Implements Hindley-Milner type inference via Algorithm W. Uses union-find for type variable substitution, supports let-polymorphism (generalization and instantiation), and performs occurs-check to prevent infinite types.
+- **Autograd** (`autograd.rs`): Reverse-mode automatic differentiation via AST source transformation. When the compiler encounters `grad(f)`, it walks the body of `f`, builds a computation tape, and generates a new function that computes gradients. This is a compile-time transformation with no runtime overhead.
 - **Code Generator** (`compiler.rs`): Walks the AST and emits stack-based bytecode. Handles local variable resolution, upvalue capture for closures, constant folding, and control flow linearization (if/else to jumps, loops to backward jumps).
 - **Bytecode** (`bytecode.rs`): Defines the instruction set and binary serialization format. The `.adamb` format consists of a magic number, version byte, constant pool, and code section.
 
@@ -39,7 +41,8 @@ A stack-based bytecode interpreter optimized for throughput:
 - **Dispatch Loop** (`vm.c`): Uses computed goto (GCC/Clang `&&label` extension) for the instruction dispatch loop, with a switch-case fallback for other compilers.
 - **Garbage Collector** (`gc.c`): Tri-color mark-and-sweep collector. Objects are white (unmarked), gray (marked but children unvisited), or black (fully traced). Collection is triggered when allocation exceeds a threshold.
 - **Hash Table** (`table.c`): Open-addressing table with Robin Hood hashing and FNV-1a hash function. Used for global variables and string interning.
-- **Objects** (`object.c`): Heap-allocated types include strings (interned), closures, upvalues, and arrays. All objects are linked into a list for GC traversal.
+- **Objects** (`object.c`): Heap-allocated types include strings (interned), closures, upvalues, arrays, and tensors. All objects are linked into a list for GC traversal.
+- **Tensor Runtime** (`native.c`, `vm.c`): ObjTensor stores multi-dimensional float arrays. Native functions provide creation (`tensor_zeros`, `tensor_ones`, `tensor_randn`), manipulation (`tensor_reshape`, `tensor_transpose`), and reduction (`tensor_sum`). Opcodes `OP_TENSOR_MATMUL`, `OP_TENSOR_ADD`, `OP_TENSOR_SUB`, `OP_TENSOR_MUL`, and `OP_TENSOR_NEG` handle element-wise and matrix operations.
 
 ### Tooling (Python)
 
@@ -63,8 +66,8 @@ Python orchestrates the Rust compiler and C VM as subprocesses:
               ┌─────────────────┐        ┌──────────────┐
 Source.adam →  │ Lexer → Parser  │        │              │
               │   → TypeCheck   │        │  VM Loader   │
-              │   → Codegen     │  .adamb│  → Dispatch  │ → stdout
-              │   → Serialize   │ ──────>│  → GC        │
+              │   → Autograd    │  .adamb│  → Dispatch  │ → stdout
+              │   → Codegen     │ ──────>│  → GC        │
               └─────────────────┘        └──────────────┘
                                                ↑
                     Python                     │

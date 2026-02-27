@@ -15,7 +15,7 @@ type TokenType =
   | "INT" | "FLOAT" | "STRING" | "IDENT" | "TRUE" | "FALSE"
   | "FN" | "LET" | "IF" | "ELSE" | "WHILE" | "FOR" | "IN"
   | "RETURN" | "BREAK" | "CONTINUE"
-  | "PLUS" | "MINUS" | "STAR" | "SLASH" | "PERCENT" | "STARSTAR"
+  | "PLUS" | "MINUS" | "STAR" | "SLASH" | "PERCENT" | "STARSTAR" | "ATAT"
   | "EQ" | "EQEQ" | "BANGEQ" | "LT" | "GT" | "LTEQ" | "GTEQ"
   | "AND" | "OR" | "BANG"
   | "PIPEGT" | "ARROW" | "FATARROW" | "PIPE"
@@ -114,7 +114,7 @@ function tokenize(source: string): Token[] {
     // Two-character operators
     const two = source.slice(pos, pos + 2);
     const twoMap: Record<string, TokenType> = {
-      "|>": "PIPEGT", "=>": "FATARROW", "->": "ARROW",
+      "|>": "PIPEGT", "=>": "FATARROW", "->": "ARROW", "@@": "ATAT",
       "==": "EQEQ", "!=": "BANGEQ", "<=": "LTEQ", ">=": "GTEQ",
       "&&": "AND", "||": "OR", "**": "STARSTAR",
     };
@@ -343,7 +343,7 @@ class Parser {
 
   private parseMultiplication(): Expr {
     let left = this.parsePower();
-    while (["STAR", "SLASH", "PERCENT"].includes(this.peek().type)) {
+    while (["STAR", "SLASH", "PERCENT", "ATAT"].includes(this.peek().type)) {
       const op = this.advance().value;
       left = { type: "binary", op, left, right: this.parsePower() };
     }
@@ -537,13 +537,59 @@ class Parser {
 
 // ── Interpreter ──────────────────────────────────────────────────────
 
-type Value = number | string | boolean | null | Value[] | Closure;
+interface Tensor {
+  __type: "tensor";
+  ndim: number;
+  shape: number[];
+  data: number[];
+}
+
+type Value = number | string | boolean | null | Value[] | Closure | Tensor;
 
 interface Closure {
   __type: "closure";
   params: string[];
   body: Expr;
   env: Env;
+}
+
+function isTensor(v: Value): v is Tensor {
+  return typeof v === "object" && v !== null && "__type" in v && v.__type === "tensor";
+}
+
+function makeTensor(shape: number[], data?: number[]): Tensor {
+  const count = shape.reduce((a, b) => a * b, 1);
+  return {
+    __type: "tensor",
+    ndim: shape.length,
+    shape: [...shape],
+    data: data ? [...data] : new Array(count).fill(0),
+  };
+}
+
+function matmul(a: Tensor, b: Tensor): Tensor {
+  if (a.ndim < 2 || b.ndim < 2) throw new Error("matmul requires 2D+ tensors");
+  const aRows = a.shape[a.ndim - 2];
+  const aCols = a.shape[a.ndim - 1];
+  const bCols = b.shape[b.ndim - 1];
+  if (aCols !== b.shape[b.ndim - 2]) throw new Error("Shape mismatch in @@");
+  const resultShape = [...a.shape.slice(0, -2), aRows, bCols];
+  const batch = a.shape.slice(0, -2).reduce((a, b) => a * b, 1);
+  const result = makeTensor(resultShape);
+  for (let bi = 0; bi < batch; bi++) {
+    const aOff = bi * aRows * aCols;
+    const rOff = bi * aRows * bCols;
+    for (let i = 0; i < aRows; i++) {
+      for (let j = 0; j < bCols; j++) {
+        let sum = 0;
+        for (let k = 0; k < aCols; k++) {
+          sum += a.data[aOff + i * aCols + k] * b.data[k * bCols + j];
+        }
+        result.data[rOff + i * bCols + j] = sum;
+      }
+    }
+  }
+  return result;
 }
 
 class BreakSignal {
@@ -636,6 +682,29 @@ export class Interpreter {
       body: { type: "var" as const, name: "__native_push" },
       env: this.env,
     });
+
+    // Tensor natives
+    for (const [name, arity] of [
+      ["tensor_zeros", 1], ["tensor_ones", 1], ["tensor_randn", 1],
+      ["tensor_from_array", 2], ["tensor_shape", 1], ["tensor_reshape", 2],
+      ["tensor_sum", 1], ["tensor_transpose", 1],
+    ] as [string, number][]) {
+      const params = Array.from({ length: arity }, (_, i) => `a${i}`);
+      this.env.define(name, {
+        __type: "closure" as const,
+        params,
+        body: { type: "var" as const, name: `__native_${name}` },
+        env: this.env,
+      });
+    }
+
+    // grad (placeholder — in playground, grad is a no-op that returns its argument)
+    this.env.define("grad", {
+      __type: "closure" as const,
+      params: ["f"],
+      body: { type: "var" as const, name: "__native_grad" },
+      env: this.env,
+    });
   }
 
   run(source: string): string {
@@ -709,7 +778,7 @@ export class Interpreter {
       }
 
       case "field": {
-        const obj = this.evalExpr(expr.object, env) as Record<string, Value>;
+        const obj = this.evalExpr(expr.object, env) as unknown as Record<string, Value>;
         return obj[expr.field];
       }
 
@@ -803,6 +872,17 @@ export class Interpreter {
     const l = this.evalExpr(left, env);
     const r = this.evalExpr(right, env);
 
+    // Tensor operations
+    if (op === "@@" && isTensor(l) && isTensor(r)) return matmul(l, r);
+    if (isTensor(l) && isTensor(r)) {
+      if (l.data.length !== r.data.length) throw new Error("Tensor shape mismatch");
+      switch (op) {
+        case "+": return makeTensor(l.shape, l.data.map((v, i) => v + r.data[i]));
+        case "-": return makeTensor(l.shape, l.data.map((v, i) => v - r.data[i]));
+        case "*": return makeTensor(l.shape, l.data.map((v, i) => v * r.data[i]));
+      }
+    }
+
     switch (op) {
       case "+":
         if (typeof l === "string" || typeof r === "string") return `${l}${r}`;
@@ -824,6 +904,9 @@ export class Interpreter {
 
   private evalUnary(op: string, operand: Expr, env: Env): Value {
     const val = this.evalExpr(operand, env);
+    if (op === "-" && isTensor(val)) {
+      return makeTensor(val.shape, val.data.map(v => -v));
+    }
     switch (op) {
       case "-": return -(val as number);
       case "!": return !val;
@@ -855,6 +938,45 @@ export class Interpreter {
         case "__native_push":
           (args[0] as Value[]).push(args[1]);
           return null;
+        case "__native_tensor_zeros":
+          return makeTensor(args[0] as number[]);
+        case "__native_tensor_ones":
+          return makeTensor(args[0] as number[], new Array((args[0] as number[]).reduce((a: number, b: number) => a * b, 1)).fill(1));
+        case "__native_tensor_randn": {
+          const shape = args[0] as number[];
+          const count = shape.reduce((a: number, b: number) => a * b, 1);
+          const data = Array.from({ length: count }, () => {
+            const u1 = Math.random() || 0.0001;
+            const u2 = Math.random() || 0.0001;
+            return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+          });
+          return makeTensor(shape, data);
+        }
+        case "__native_tensor_from_array":
+          return makeTensor(args[1] as number[], (args[0] as number[]).map(Number));
+        case "__native_tensor_shape":
+          return isTensor(args[0]) ? [...args[0].shape] : null;
+        case "__native_tensor_reshape": {
+          if (!isTensor(args[0])) return null;
+          return makeTensor(args[1] as number[], args[0].data);
+        }
+        case "__native_tensor_sum": {
+          if (!isTensor(args[0])) return null;
+          return args[0].data.reduce((a: number, b: number) => a + b, 0);
+        }
+        case "__native_tensor_transpose": {
+          if (!isTensor(args[0]) || args[0].ndim !== 2) return null;
+          const src = args[0];
+          const rows = src.shape[0], cols = src.shape[1];
+          const data: number[] = new Array(rows * cols);
+          for (let i = 0; i < rows; i++)
+            for (let j = 0; j < cols; j++)
+              data[j * rows + i] = src.data[i * cols + j];
+          return makeTensor([cols, rows], data);
+        }
+        case "__native_grad":
+          // In playground, grad just returns the function as-is (no AD)
+          return args[0];
         default:
           throw new Error(`Unknown native: ${name}`);
       }
@@ -877,6 +999,13 @@ export class Interpreter {
     if (value === null) return "nil";
     if (value === true) return "true";
     if (value === false) return "false";
+    if (isTensor(value)) {
+      const shapeStr = value.shape.join(", ");
+      const limit = 8;
+      const dataStr = value.data.slice(0, limit).map(v => String(v)).join(", ");
+      const ellipsis = value.data.length > limit ? ", ..." : "";
+      return `Tensor<[${shapeStr}]>(${dataStr}${ellipsis})`;
+    }
     if (Array.isArray(value)) {
       return "[" + value.map((v) => this.stringify(v)).join(", ") + "]";
     }

@@ -11,6 +11,7 @@
 | Nil | (implicit) | Absence of value |
 | Array | `[1, 2, 3]` | Ordered, mutable, heterogeneous |
 | Function | `fn f(x) { x }` | First-class, supports closures |
+| Tensor | `tensor_zeros([2, 3])` | Multi-dimensional array of doubles |
 
 ## Grammar
 
@@ -30,7 +31,7 @@ and_expr    = equality ("&&" equality)*
 equality    = comparison (("==" | "!=") comparison)*
 comparison  = addition (("<" | ">" | "<=" | ">=") addition)*
 addition    = multiply (("+" | "-") multiply)*
-multiply    = power (("*" | "/" | "%") power)*
+multiply    = power (("*" | "/" | "%" | "@@") power)*
 power       = unary ("**" power)?                    // right-associative
 unary       = ("-" | "!") unary | call
 call        = primary ("(" args? ")" | "[" expr "]" | "." IDENT)*
@@ -113,6 +114,7 @@ println(add5(10))   // 15
 | `/` | Division | `10 / 3` |
 | `%` | Modulo | `10 % 3` |
 | `**` | Exponentiation (right-associative) | `2 ** 10` |
+| `@@` | Matrix multiply (tensors) | `a @@ b` |
 | `-` (unary) | Negation | `-x` |
 
 ### Comparison
@@ -228,6 +230,98 @@ let sign = if n > 0 { "positive" }
            else if n < 0 { "negative" }
            else { "zero" }
 ```
+
+## Tensor Types
+
+Adam has built-in tensor support with shape-typed dimensions and compile-time shape checking.
+
+### Tensor Creation
+
+```
+let zeros = tensor_zeros([2, 3])          // 2x3 tensor of zeros
+let ones = tensor_ones([3, 2])            // 3x2 tensor of ones
+let rand = tensor_randn([784, 10])        // random normal
+let data = tensor_from_array([1, 2, 3, 4], [2, 2])   // from flat data + shape
+```
+
+### Shape-Typed Annotations
+
+Tensor type annotations use `Tensor<DType, [dims]>` syntax with dimension variables:
+
+```
+fn predict(images: Tensor<Float, [N, 784]>) -> Tensor<Float, [N, 10]> {
+    images @@ weights + bias
+}
+```
+
+Dimension variables (`N`, `M`, `K`) are uppercase identifiers that unify like type variables but are restricted to integer kinds. The compiler checks shapes at compile time:
+- `Tensor<F, [N, 784]> @@ Tensor<F, [784, 10]>` unifies to `Tensor<F, [N, 10]>` (valid)
+- `Tensor<F, [N, 3]> @@ Tensor<F, [5, M]>` produces a shape mismatch error (3 != 5)
+
+### Matrix Multiply (@@)
+
+The `@@` operator performs matrix multiplication:
+
+```
+let a = tensor_from_array([1, 2, 3, 4, 5, 6], [2, 3])  // [2, 3]
+let b = tensor_from_array([1, 0, 0, 1, 0, 0], [3, 2])  // [3, 2]
+let c = a @@ b                                           // [2, 2]
+```
+
+Binding power is the same as `*` (level 8). The inner dimensions must match.
+
+### Element-wise Operations
+
+Standard arithmetic operators work element-wise on tensors of the same shape:
+
+```
+let x = tensor_ones([2, 2])
+let y = tensor_from_array([10, 20, 30, 40], [2, 2])
+x + y    // element-wise add
+y - x    // element-wise subtract
+x * y    // element-wise multiply (Hadamard product)
+-x       // element-wise negate
+```
+
+### Tensor Built-in Functions
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `tensor_zeros` | `([Int]) -> Tensor` | Create zero tensor from shape array |
+| `tensor_ones` | `([Int]) -> Tensor` | Create ones tensor from shape array |
+| `tensor_randn` | `([Int]) -> Tensor` | Create random normal tensor |
+| `tensor_from_array` | `([Float], [Int]) -> Tensor` | Create tensor from flat data + shape |
+| `tensor_shape` | `(Tensor) -> [Int]` | Get shape as array |
+| `tensor_reshape` | `(Tensor, [Int]) -> Tensor` | Reshape (element count must match) |
+| `tensor_sum` | `(Tensor) -> Float` | Sum all elements to scalar |
+| `tensor_transpose` | `(Tensor) -> Tensor` | Transpose 2D tensor |
+
+## Automatic Differentiation
+
+The `grad()` compiler intrinsic transforms a function into its reverse-mode derivative at compile time:
+
+```
+fn loss(x) {
+    let h = x @@ w1
+    let out = h @@ w2
+    tensor_sum(out)
+}
+
+// grad(loss) generates a gradient function via AST transformation
+let grad_loss = grad(loss)
+let grads = grad_loss(input)   // gradient of loss w.r.t. input
+```
+
+This is a **source transformation**, not a runtime tape. The compiler walks the function's AST, builds a computation tape, and emits a new function with both forward and backward passes.
+
+Supported differentiation rules:
+- `a + b`: adjoints pass through
+- `a - b`: adjoint of b is negated
+- `a * b` (element-wise): `d_a = adj * b`, `d_b = adj * a`
+- `a @@ b` (matmul): `d_a = adj @@ transpose(b)`, `d_b = transpose(a) @@ adj`
+- `-a`: adjoint is negated
+- `tensor_sum(a)`: adjoint broadcasts to `ones_like(a)`
+- `tensor_transpose(a)`: adjoint is transposed
 
 ## Type Inference
 

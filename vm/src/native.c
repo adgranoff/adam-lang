@@ -83,6 +83,7 @@ static Value type_of_native(VM* vm, int arg_count, Value* args) {
         case OBJ_ARRAY:    return OBJ_VAL(adam_copy_string(vm, "array", 5));
         case OBJ_STRUCT:   return OBJ_VAL(adam_copy_string(vm, "struct", 6));
         case OBJ_VARIANT:  return OBJ_VAL(adam_copy_string(vm, "variant", 7));
+        case OBJ_TENSOR:   return OBJ_VAL(adam_copy_string(vm, "tensor", 6));
         default: break;
         }
     }
@@ -121,6 +122,133 @@ static Value abs_native(VM* vm, int arg_count, Value* args) {
     return NIL_VAL;
 }
 
+/* ── Tensor native functions ───────────────────────────────────────── */
+
+/* Helper: extract an array of ints from an Adam array value for shapes */
+static bool extract_shape(Value val, int* out_shape, int* out_ndim) {
+    if (!IS_ARRAY(val)) return false;
+    ObjArray* arr = AS_ARRAY(val);
+    *out_ndim = arr->count;
+    for (int i = 0; i < arr->count; i++) {
+        if (!IS_INT(arr->elements[i])) return false;
+        out_shape[i] = AS_INT(arr->elements[i]);
+    }
+    return true;
+}
+
+static Value tensor_zeros_native(VM* vm, int arg_count, Value* args) {
+    if (arg_count != 1) {
+        /* Return nil on bad arity — type checker prevents this in typed code */
+        return NIL_VAL;
+    }
+    int shape[16];
+    int ndim;
+    if (!extract_shape(args[0], shape, &ndim)) return NIL_VAL;
+    ObjTensor* tensor = adam_new_tensor(vm, ndim, shape);
+    /* adam_new_tensor already zeroes data */
+    return OBJ_VAL(tensor);
+}
+
+static Value tensor_ones_native(VM* vm, int arg_count, Value* args) {
+    if (arg_count != 1) return NIL_VAL;
+    int shape[16];
+    int ndim;
+    if (!extract_shape(args[0], shape, &ndim)) return NIL_VAL;
+    ObjTensor* tensor = adam_new_tensor(vm, ndim, shape);
+    for (int i = 0; i < tensor->count; i++) {
+        tensor->data[i] = 1.0;
+    }
+    return OBJ_VAL(tensor);
+}
+
+static Value tensor_randn_native(VM* vm, int arg_count, Value* args) {
+    if (arg_count != 1) return NIL_VAL;
+    int shape[16];
+    int ndim;
+    if (!extract_shape(args[0], shape, &ndim)) return NIL_VAL;
+    ObjTensor* tensor = adam_new_tensor(vm, ndim, shape);
+    /* Box-Muller transform for approximate normal distribution */
+    for (int i = 0; i < tensor->count; i++) {
+        double u1 = ((double)rand() + 1.0) / ((double)RAND_MAX + 1.0);
+        double u2 = ((double)rand() + 1.0) / ((double)RAND_MAX + 1.0);
+        tensor->data[i] = sqrt(-2.0 * log(u1)) * cos(2.0 * M_PI * u2);
+    }
+    return OBJ_VAL(tensor);
+}
+
+static Value tensor_from_array_native(VM* vm, int arg_count, Value* args) {
+    if (arg_count != 2) return NIL_VAL;
+    if (!IS_ARRAY(args[0])) return NIL_VAL;
+    int shape[16];
+    int ndim;
+    if (!extract_shape(args[1], shape, &ndim)) return NIL_VAL;
+    ObjTensor* tensor = adam_new_tensor(vm, ndim, shape);
+    ObjArray* data_arr = AS_ARRAY(args[0]);
+    int count = data_arr->count < tensor->count ? data_arr->count : tensor->count;
+    for (int i = 0; i < count; i++) {
+        if (IS_INT(data_arr->elements[i])) {
+            tensor->data[i] = (double)AS_INT(data_arr->elements[i]);
+        } else if (IS_FLOAT(data_arr->elements[i])) {
+            tensor->data[i] = AS_FLOAT(data_arr->elements[i]);
+        }
+    }
+    return OBJ_VAL(tensor);
+}
+
+static Value tensor_shape_native(VM* vm, int arg_count, Value* args) {
+    if (arg_count != 1 || !IS_TENSOR(args[0])) return NIL_VAL;
+    ObjTensor* tensor = AS_TENSOR(args[0]);
+    ObjArray* arr = adam_new_array(vm);
+    adam_vm_push(vm, OBJ_VAL(arr)); /* GC protect */
+    for (int i = 0; i < tensor->ndim; i++) {
+        adam_array_push(vm, arr, INT_VAL(tensor->shape[i]));
+    }
+    adam_vm_pop(vm);
+    return OBJ_VAL(arr);
+}
+
+static Value tensor_reshape_native(VM* vm, int arg_count, Value* args) {
+    if (arg_count != 2 || !IS_TENSOR(args[0])) return NIL_VAL;
+    ObjTensor* src = AS_TENSOR(args[0]);
+    int shape[16];
+    int ndim;
+    if (!extract_shape(args[1], shape, &ndim)) return NIL_VAL;
+    /* Verify element count matches */
+    int count = 1;
+    for (int i = 0; i < ndim; i++) count *= shape[i];
+    if (count != src->count) return NIL_VAL;
+    ObjTensor* tensor = adam_new_tensor(vm, ndim, shape);
+    memcpy(tensor->data, src->data, sizeof(double) * count);
+    return OBJ_VAL(tensor);
+}
+
+static Value tensor_sum_native(VM* vm, int arg_count, Value* args) {
+    (void)vm;
+    if (arg_count != 1 || !IS_TENSOR(args[0])) return NIL_VAL;
+    ObjTensor* tensor = AS_TENSOR(args[0]);
+    double sum = 0.0;
+    for (int i = 0; i < tensor->count; i++) {
+        sum += tensor->data[i];
+    }
+    return FLOAT_VAL(sum);
+}
+
+static Value tensor_transpose_native(VM* vm, int arg_count, Value* args) {
+    if (arg_count != 1 || !IS_TENSOR(args[0])) return NIL_VAL;
+    ObjTensor* src = AS_TENSOR(args[0]);
+    if (src->ndim != 2) return NIL_VAL; /* Only 2D transpose for now */
+    int new_shape[2] = { src->shape[1], src->shape[0] };
+    ObjTensor* result = adam_new_tensor(vm, 2, new_shape);
+    int rows = src->shape[0];
+    int cols = src->shape[1];
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            result->data[j * rows + i] = src->data[i * cols + j];
+        }
+    }
+    return OBJ_VAL(result);
+}
+
 /* ── Registration ──────────────────────────────────────────────────── */
 
 void adam_register_natives(VM* vm) {
@@ -133,4 +261,14 @@ void adam_register_natives(VM* vm) {
     define_native(vm, "to_float",to_float_native);
     define_native(vm, "sqrt",    sqrt_native);
     define_native(vm, "abs",     abs_native);
+
+    /* Tensor natives */
+    define_native(vm, "tensor_zeros",     tensor_zeros_native);
+    define_native(vm, "tensor_ones",      tensor_ones_native);
+    define_native(vm, "tensor_randn",     tensor_randn_native);
+    define_native(vm, "tensor_from_array",tensor_from_array_native);
+    define_native(vm, "tensor_shape",     tensor_shape_native);
+    define_native(vm, "tensor_reshape",   tensor_reshape_native);
+    define_native(vm, "tensor_sum",       tensor_sum_native);
+    define_native(vm, "tensor_transpose", tensor_transpose_native);
 }

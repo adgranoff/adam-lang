@@ -60,6 +60,13 @@ pub enum Op {
     Match,
     Print,
     Pop,
+
+    // Tensor operations
+    TensorMatMul,
+    TensorAdd,
+    TensorSub,
+    TensorMul,
+    TensorNeg,
 }
 
 /// A constant value in the bytecode constant pool.

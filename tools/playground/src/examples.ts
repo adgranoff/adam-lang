@@ -107,4 +107,41 @@ println(x)
 println(y)
 `,
   },
+  {
+    name: "Tensors & MatMul",
+    code: `// Tensor operations — shape-typed matrix multiply
+let a = tensor_from_array([1, 2, 3, 4, 5, 6], [2, 3])
+let b = tensor_from_array([1, 0, 0, 1, 0, 0], [3, 2])
+
+// Matrix multiply: [2,3] @@ [3,2] -> [2,2]
+let c = a @@ b
+println(c)
+
+// Element-wise ops
+let x = tensor_ones([2, 2])
+let y = tensor_from_array([10, 20, 30, 40], [2, 2])
+println(x + y)
+println(tensor_sum(y))
+println(tensor_transpose(a))
+`,
+  },
+  {
+    name: "Neural Net (Autograd)",
+    code: `// Autograd — compile-time automatic differentiation
+let w = tensor_from_array([1, 0, 0, 1, 0, 0], [3, 2])
+
+fn loss(x) {
+    let h = x @@ w
+    tensor_sum(h)
+}
+
+let input = tensor_from_array([1, 2, 3], [1, 3])
+println(loss(input))
+
+// grad(loss) generates the gradient function at compile time
+let grad_loss = grad(loss)
+let grads = grad_loss(input)
+println(tensor_shape(grads))
+`,
+  },
 ];

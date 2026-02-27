@@ -187,6 +187,9 @@ static void blacken_object(VM* vm, Obj* object) {
     case OBJ_STRING:
         /* Strings have no outgoing references. */
         break;
+    case OBJ_TENSOR:
+        /* Tensors contain raw doubles, no GC references. */
+        break;
     }
 }
 
