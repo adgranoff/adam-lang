@@ -70,6 +70,9 @@ pub enum Op {
 
     // Algebraic data types
     VariantNew,
+
+    // Optimization
+    TailCall,
 }
 
 /// A constant value in the bytecode constant pool.

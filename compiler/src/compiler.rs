@@ -329,7 +329,7 @@ impl Compiler {
 
             StmtKind::Return(expr) => {
                 if let Some(e) = expr {
-                    self.compile_expr(e)?;
+                    self.compile_expr_in_tail(e)?;
                 } else {
                     self.emit_op(Op::Nil);
                 }
@@ -769,13 +769,13 @@ impl Compiler {
                     self.compile_stmt(s)?;
                 }
                 if let Some(e) = expr {
-                    self.compile_expr(e)?;
+                    self.compile_expr_in_tail(e)?;
                 } else {
                     self.emit_op(Op::Nil);
                 }
             }
             _ => {
-                self.compile_expr(body)?;
+                self.compile_expr_in_tail(body)?;
             }
         }
         self.emit_op(Op::Return);
@@ -802,6 +802,70 @@ impl Compiler {
             self.emit_byte(uv.index);
         }
 
+        Ok(())
+    }
+
+    // ── Tail call optimization ────────────────────────────────────
+
+    /// Compile an expression in tail position. Calls become TailCall,
+    /// and If/Block propagate tail position into their sub-expressions.
+    fn compile_expr_in_tail(&mut self, expr: &Expr) -> Result<(), String> {
+        match &expr.kind {
+            ExprKind::Call { callee, args } => {
+                self.compile_expr(callee)?;
+                for arg in args {
+                    self.compile_expr(arg)?;
+                }
+                assert!(args.len() <= u8::MAX as usize, "Too many arguments (max 255)");
+                self.emit_op(Op::TailCall);
+                self.emit_byte(args.len() as u8);
+            }
+
+            ExprKind::Pipe { left, right } => {
+                self.compile_expr(right)?;
+                self.compile_expr(left)?;
+                self.emit_op(Op::TailCall);
+                self.emit_byte(1);
+            }
+
+            ExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                self.compile_expr(condition)?;
+                let then_jump = self.emit_jump(Op::JumpIfFalse);
+                self.emit_op(Op::Pop);
+                self.compile_expr_in_tail(then_branch)?;
+                let else_jump = self.emit_jump(Op::Jump);
+                self.patch_jump(then_jump);
+                self.emit_op(Op::Pop);
+                if let Some(else_b) = else_branch {
+                    self.compile_expr_in_tail(else_b)?;
+                } else {
+                    self.emit_op(Op::Nil);
+                }
+                self.patch_jump(else_jump);
+            }
+
+            ExprKind::Block { stmts, expr } => {
+                self.begin_scope();
+                for s in stmts {
+                    self.compile_stmt(s)?;
+                }
+                if let Some(e) = expr {
+                    self.compile_expr_in_tail(e)?;
+                } else {
+                    self.emit_op(Op::Nil);
+                }
+                self.end_scope();
+            }
+
+            // All other expressions: not tail-call-eligible, compile normally.
+            _ => {
+                self.compile_expr(expr)?;
+            }
+        }
         Ok(())
     }
 
@@ -1067,6 +1131,49 @@ mod tests {
         let prog = compile_source("true && false");
         assert!(find_op(&prog.code, Op::JumpIfFalse));
         // No OP_AND exists — it's compiled to jumps.
+    }
+
+    #[test]
+    fn test_tail_call_optimization() {
+        // Tail call: last expression in function body is a call
+        let prog = compile_source("fn f(n) { f(n) }");
+        let fn_const = prog.constants.iter().find(|c| matches!(c, Constant::Function { .. })).unwrap();
+        if let Constant::Function { code, .. } = fn_const {
+            assert!(find_op(code, Op::TailCall), "Expected TailCall in tail position");
+            assert!(!find_op(code, Op::Call), "Call should be replaced by TailCall");
+        }
+    }
+
+    #[test]
+    fn test_tail_call_in_if_branches() {
+        // Both branches of an if in tail position should get TailCall
+        let prog = compile_source("fn f(n) { if n > 0 { f(n - 1) } else { f(0) } }");
+        let fn_const = prog.constants.iter().find(|c| matches!(c, Constant::Function { .. })).unwrap();
+        if let Constant::Function { code, .. } = fn_const {
+            assert!(find_op(code, Op::TailCall), "Expected TailCall in if branches");
+            assert!(!find_op(code, Op::Call), "All calls should be TailCall");
+        }
+    }
+
+    #[test]
+    fn test_non_tail_call_not_optimized() {
+        // f(n) + 1 is NOT a tail call — result is used in addition
+        let prog = compile_source("fn f(n) { f(n) + 1 }");
+        let fn_const = prog.constants.iter().find(|c| matches!(c, Constant::Function { .. })).unwrap();
+        if let Constant::Function { code, .. } = fn_const {
+            assert!(find_op(code, Op::Call), "Non-tail call should remain Call");
+            assert!(!find_op(code, Op::TailCall), "Should not have TailCall");
+        }
+    }
+
+    #[test]
+    fn test_explicit_return_tail_call() {
+        // return f(n) is a tail call
+        let prog = compile_source("fn f(n) {\n  return f(n)\n}");
+        let fn_const = prog.constants.iter().find(|c| matches!(c, Constant::Function { .. })).unwrap();
+        if let Constant::Function { code, .. } = fn_const {
+            assert!(find_op(code, Op::TailCall), "return f(n) should be a tail call");
+        }
     }
 
     #[test]

@@ -281,6 +281,7 @@ static InterpretResult run(VM* vm) {
         &&op_TENSOR_MATMUL, &&op_TENSOR_ADD, &&op_TENSOR_SUB,
         &&op_TENSOR_MUL, &&op_TENSOR_NEG,
         &&op_VARIANT_NEW,
+        &&op_TAIL_CALL,
     };
     #define DISPATCH() do { goto *dispatch_table[READ_BYTE()]; } while (0)
     #define CASE(name) op_##name
@@ -948,6 +949,50 @@ static InterpretResult run(VM* vm) {
         ObjVariant* variant = adam_new_variant(vm, tag, payload);
         adam_vm_pop(vm);  /* Pop payload */
         adam_vm_push(vm, OBJ_VAL(variant));
+        DISPATCH();
+    }
+
+    CASE(TAIL_CALL): {
+        int arg_count = READ_BYTE();
+        Value callee = peek(vm, arg_count);
+
+        /* Native functions can't be tail-called — fall back to normal call. */
+        if (IS_OBJ(callee) && OBJ_TYPE(callee) == OBJ_NATIVE) {
+            NativeFn native = AS_NATIVE(callee);
+            Value result = native(vm, arg_count,
+                                  vm->stack_top - arg_count);
+            vm->stack_top -= arg_count + 1;
+            adam_vm_push(vm, result);
+            DISPATCH();
+        }
+
+        if (!IS_OBJ(callee) || OBJ_TYPE(callee) != OBJ_CLOSURE) {
+            runtime_error(vm, "Can only call functions and closures.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+
+        ObjClosure* closure = AS_CLOSURE(callee);
+        if (arg_count != closure->function->arity) {
+            runtime_error(vm, "Expected %d arguments but got %d.",
+                         closure->function->arity, arg_count);
+            return INTERPRET_RUNTIME_ERROR;
+        }
+
+        /* Close any open upvalues in the current frame before reusing it. */
+        close_upvalues(vm, frame->slots);
+
+        /* Slide callee + arguments down to the current frame's stack window.
+         * slot[0] = closure (the function object itself)
+         * slot[1..arg_count] = arguments */
+        Value* args_start = vm->stack_top - arg_count - 1;
+        for (int i = 0; i <= arg_count; i++) {
+            frame->slots[i] = args_start[i];
+        }
+        vm->stack_top = frame->slots + arg_count + 1;
+
+        /* Reuse the current frame with the new closure. */
+        frame->closure = closure;
+        frame->ip = closure->function->chunk.code;
         DISPATCH();
     }
 

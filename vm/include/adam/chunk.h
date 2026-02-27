@@ -99,6 +99,9 @@ typedef enum {
 
     /* Algebraic data types */
     OP_VARIANT_NEW,     /* [tag_idx]       Pop payload, create variant with tag  */
+
+    /* Optimization */
+    OP_TAIL_CALL,       /* [arg_count]     Tail call: reuse current frame        */
 } OpCode;
 
 /* ── Chunk ─────────────────────────────────────────────────────────── */

@@ -1,0 +1,15 @@
+// Tail call optimization — deep recursion without stack overflow.
+// Demonstrates: TCO transforms recursive calls into frame reuse.
+
+// Accumulator-style tail-recursive sum: sum(n, acc) = acc + n + (n-1) + ... + 1
+fn sum(n, acc) {
+    if n <= 0 {
+        acc
+    } else {
+        sum(n - 1, acc + n)
+    }
+}
+
+// Without TCO this would overflow the 64-frame call stack.
+println(sum(10000, 0))
+// expect: 50005000
