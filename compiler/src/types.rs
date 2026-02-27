@@ -783,19 +783,47 @@ impl TypeChecker {
                 },
             },
         );
-        // tensor_from_array: ([Float], [Int]) → Tensor
+        // tensor_from_array: ([α], [Int]) → Tensor
+        // Accept any numeric array (Int or Float) — VM coerces to f64 at runtime.
+        let tfa_elem = self.subst.fresh_var();
+        let tfa_elem_id = match &tfa_elem { Type::Var(id) => *id, _ => unreachable!() };
         let tfa = self.subst.fresh_var();
         let tfa_id = match &tfa { Type::Var(id) => *id, _ => unreachable!() };
         self.env.bind(
             "tensor_from_array".into(),
             Scheme {
-                vars: vec![tfa_id],
+                vars: vec![tfa_elem_id, tfa_id],
                 ty: Type::Fn {
                     params: vec![
-                        Type::Array(Box::new(Type::Float)),
+                        Type::Array(Box::new(tfa_elem)),
                         Type::Array(Box::new(Type::Int)),
                     ],
                     ret: Box::new(tfa),
+                },
+            },
+        );
+
+        // grad: (α → β) → (α → α)
+        // Compiler intrinsic for reverse-mode AD. The autograd pass transforms
+        // grad(f) calls after type checking, but the type checker needs to know
+        // the signature so it doesn't reject the call as an undefined variable.
+        let ga = self.subst.fresh_var();
+        let ga_id = match &ga { Type::Var(id) => *id, _ => unreachable!() };
+        let gb = self.subst.fresh_var();
+        let gb_id = match &gb { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "grad".into(),
+            Scheme {
+                vars: vec![ga_id, gb_id],
+                ty: Type::Fn {
+                    params: vec![Type::Fn {
+                        params: vec![ga.clone()],
+                        ret: Box::new(gb),
+                    }],
+                    ret: Box::new(Type::Fn {
+                        params: vec![ga.clone()],
+                        ret: Box::new(ga),
+                    }),
                 },
             },
         );
@@ -1187,7 +1215,7 @@ impl TypeChecker {
                 match op {
                     // Arithmetic: both operands must be numeric, result is same type.
                     BinOp::Add => {
-                        // Add is special: works on Int, Float, or String.
+                        // Add is special: works on Int, Float, String, or Tensor.
                         // Use a fresh var and unify both sides.
                         let result = self.subst.fresh_var();
                         self.unify(&lt, &rt, expr.span);
@@ -1195,7 +1223,7 @@ impl TypeChecker {
                         // Verify it's a valid type for addition.
                         let resolved = self.subst.resolve(&result);
                         match resolved {
-                            Type::Int | Type::Float | Type::Str | Type::Var(_) => {}
+                            Type::Int | Type::Float | Type::Str | Type::Tensor { .. } | Type::Var(_) => {}
                             _ => {
                                 self.errors.push(TypeError {
                                     message: format!(
@@ -1326,11 +1354,11 @@ impl TypeChecker {
                     }
 
                     BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::Pow => {
-                        // Numeric only. Both sides must unify.
+                        // Numeric or tensor element-wise ops. Both sides must unify.
                         self.unify(&lt, &rt, expr.span);
                         let resolved = self.subst.resolve(&lt);
                         match resolved {
-                            Type::Int | Type::Float | Type::Var(_) => {}
+                            Type::Int | Type::Float | Type::Tensor { .. } | Type::Var(_) => {}
                             _ => {
                                 self.errors.push(TypeError {
                                     message: format!(
