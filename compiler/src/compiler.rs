@@ -505,51 +505,11 @@ impl Compiler {
                         self.emit_byte(args.len() as u8);
                     }
                 }
-                // Variant tag as a string constant
+                // OP_VARIANT_NEW reads a tag string constant, pops the payload,
+                // and creates an ObjVariant(tag, payload).
                 let tag_idx = self.add_constant(Constant::String(name.clone()));
-                // Use a custom approach: push tag name, then create variant.
-                // The VM has adam_new_variant(tag, payload). We need to emit
-                // bytecode that creates a variant. Since there's no dedicated
-                // opcode for variant creation, we'll use OP_STRUCT_NEW with
-                // a single field "__payload" and the tag as the struct name.
-                // Actually, let me use the global function approach:
-                // store payload, load a builder... No, that's complex.
-                //
-                // Simplest: add the tag string to constants, then use a call
-                // to a native function. But we don't have one.
-                //
-                // For now: create a struct with name=variant_tag, one field
-                // "__tag" and "__payload". The Match opcode checks IS_VARIANT
-                // but we're creating structs... This won't work.
-                //
-                // The right fix: we need an OP_VARIANT_NEW opcode, or use the
-                // struct workaround. Let me check what the VM expects for Match.
-                //
-                // OP_MATCH checks IS_VARIANT(top) && AS_VARIANT(top)->tag == expected.
-                // So we MUST create ObjVariant objects. But the only way to do
-                // that is via adam_new_variant in C, which isn't exposed as an opcode.
-                //
-                // Solution: I'll leave the payload already on the stack (compiled above),
-                // and the tag constant is known. We need a new bytecode approach.
-                //
-                // Actually, the simplest path: emit a native function call.
-                // Or better: reuse OP_STRUCT_NEW to represent variants by convention
-                // and adjust the match logic. But that changes the VM.
-                //
-                // Pragmatic solution: use a 2-field struct { __tag: "Name", __value: payload }
-                // and adjust match to check struct field instead of ObjVariant.
-                //
-                // But that's a big VM change. For now, let's just note that variant
-                // construction requires VM support we'll add shortly. Use a placeholder.
-                //
-                // TEMPORARY: emit as a struct with the variant name. This won't
-                // work with OP_MATCH but allows the rest of the compiler to proceed.
-                // We'll revisit this when we add proper variant support.
-                self.emit_op(Op::StructNew);
+                self.emit_op(Op::VariantNew);
                 self.emit_byte(tag_idx);
-                self.emit_byte(1); // one field
-                let payload_name = self.add_constant(Constant::String("_0".to_string()));
-                self.emit_byte(payload_name);
             }
 
             ExprKind::Break => {
@@ -799,7 +759,25 @@ impl Compiler {
             self.define_local();
         }
 
-        self.compile_expr(body)?;
+        // If body is a Block, inline its contents directly into the function
+        // scope. This avoids the Block's end_scope popping locals from the
+        // top of the stack, which would clobber the tail expression result.
+        // OP_RETURN already cleans up the entire frame.
+        match &body.kind {
+            ExprKind::Block { stmts, expr } => {
+                for s in stmts {
+                    self.compile_stmt(s)?;
+                }
+                if let Some(e) = expr {
+                    self.compile_expr(e)?;
+                } else {
+                    self.emit_op(Op::Nil);
+                }
+            }
+            _ => {
+                self.compile_expr(body)?;
+            }
+        }
         self.emit_op(Op::Return);
 
         // No end_scope — the function's frame is cleaned up by OP_RETURN.

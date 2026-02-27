@@ -67,6 +67,9 @@ pub enum Op {
     TensorSub,
     TensorMul,
     TensorNeg,
+
+    // Algebraic data types
+    VariantNew,
 }
 
 /// A constant value in the bytecode constant pool.

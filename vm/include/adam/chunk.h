@@ -96,6 +96,9 @@ typedef enum {
     OP_TENSOR_SUB,      /*                 Element-wise sub                     */
     OP_TENSOR_MUL,      /*                 Element-wise mul (Hadamard)          */
     OP_TENSOR_NEG,      /*                 Element-wise negate                  */
+
+    /* Algebraic data types */
+    OP_VARIANT_NEW,     /* [tag_idx]       Pop payload, create variant with tag  */
 } OpCode;
 
 /* ── Chunk ─────────────────────────────────────────────────────────── */
