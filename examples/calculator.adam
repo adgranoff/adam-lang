@@ -1,0 +1,37 @@
+// Calculator — demonstrates closures, pipe operator, arrays.
+
+fn double(x) { x * 2 }
+fn add_one(x) { x + 1 }
+
+// Pipe operator
+let result = 5 |> double |> add_one
+println(result)
+// expect: 11
+
+// Array operations
+let arr = [10, 20, 30, 40, 50]
+println(len(arr))
+// expect: 5
+println(arr[2])
+// expect: 30
+
+// Closures
+fn make_adder(n) {
+    |x| n + x
+}
+let add5 = make_adder(5)
+println(add5(10))
+// expect: 15
+
+// String concatenation
+let greeting = "Hello" + " " + "World!"
+println(greeting)
+// expect: Hello World!
+
+// Boolean logic
+let x = true && false
+let y = true || false
+println(x)
+// expect: false
+println(y)
+// expect: true

@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── C VM ──────────────────────────────────────────────
+      - name: Build VM
+        run: cd vm && cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
+
+      - name: Test VM
+        run: cd vm/build && ctest --output-on-failure
+
+      # ── Rust Compiler ─────────────────────────────────────
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            compiler/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('compiler/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Build compiler
+        run: cd compiler && cargo build --release
+
+      - name: Test compiler
+        run: cd compiler && cargo test
+
+      # ── Python Tooling + E2E Tests ────────────────────────
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Python dependencies
+        run: cd stdlib && uv sync
+
+      - name: Run E2E tests
+        run: cd stdlib && uv run --with pytest pytest "../tests/test_e2e.py" -v
+
+      # ── TypeScript ────────────────────────────────────────
+      - name: Build LSP server
+        run: cd tools/lsp && npm ci && npx tsc
+
+      - name: Build playground
+        run: cd tools/playground && npm ci && npx vite build

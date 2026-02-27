@@ -1,0 +1,200 @@
+# Adam
+
+A statically-typed, expression-oriented programming language with Hindley-Milner type inference, compiled to bytecode and executed on a custom virtual machine.
+
+```
+fn fibonacci(n) {
+    if n <= 1 { n }
+    else { fibonacci(n - 1) + fibonacci(n - 2) }
+}
+
+println(fibonacci(20))
+```
+
+## Architecture
+
+```mermaid
+graph LR
+    A[Source .adam] --> B[Lexer]
+    B --> C[Parser]
+    C --> D[Type Checker]
+    D --> E[Codegen]
+    E --> F[Bytecode .adamb]
+    F --> G[Virtual Machine]
+    G --> H[Output]
+
+    style B fill:#dea584,color:#000
+    style C fill:#dea584,color:#000
+    style D fill:#dea584,color:#000
+    style E fill:#dea584,color:#000
+    style G fill:#7ec8e3,color:#000
+```
+
+| Component | Language | Description |
+|-----------|----------|-------------|
+| **Compiler** | Rust | Lexer, Pratt parser, HM type inference, bytecode codegen |
+| **VM** | C | NaN-boxed values, computed goto dispatch, tri-color GC |
+| **Tooling** | Python | CLI runner, interactive REPL, test framework, benchmarks |
+| **Editor** | TypeScript | LSP server, browser playground with Monaco editor |
+
+## Language Features
+
+### Type Inference
+
+Types are inferred via Hindley-Milner Algorithm W. No type annotations required.
+
+```
+let x = 42          // inferred as Int
+let name = "hello"  // inferred as String
+
+fn id(x) { x }      // polymorphic: forall a. a -> a
+id(42)               // Int
+id(true)             // Bool
+```
+
+### First-Class Functions and Closures
+
+```
+fn make_counter(start) {
+    let count = start
+    |step| {
+        count = count + step
+        count
+    }
+}
+
+let counter = make_counter(0)
+println(counter(1))   // 1
+println(counter(1))   // 2
+println(counter(5))   // 7
+```
+
+### Pipe Operator
+
+```
+fn double(x) { x * 2 }
+fn add_one(x) { x + 1 }
+fn square(x) { x * x }
+
+let result = 5 |> double |> add_one |> square
+println(result)  // 121
+```
+
+### Arrays
+
+```
+let numbers = [10, 20, 30, 40, 50]
+println(len(numbers))   // 5
+println(numbers[2])     // 30
+
+let total = 0
+for x in numbers {
+    total = total + x
+}
+println(total)  // 150
+```
+
+### Expression-Oriented
+
+Everything returns a value. `if/else`, blocks, and functions all evaluate to their last expression.
+
+```
+let max = if a > b { a } else { b }
+
+let result = {
+    let x = 10
+    let y = 20
+    x + y
+}
+```
+
+## Quick Start
+
+### Prerequisites
+
+- Rust (cargo)
+- C compiler (GCC or MinGW) + CMake
+- Python 3.11+ with [UV](https://docs.astral.sh/uv/)
+- [just](https://github.com/casey/just) command runner
+
+### Build and Run
+
+```bash
+# Build the compiler and VM
+just build
+
+# Run a program
+just run examples/fibonacci.adam
+
+# Launch the REPL
+just repl
+
+# Run all tests
+just test
+```
+
+## Build Commands
+
+| Command | Description |
+|---------|-------------|
+| `just build` | Build VM and compiler |
+| `just test` | Run all test suites (VM, compiler, E2E) |
+| `just run <file>` | Compile and execute an .adam file |
+| `just check <file>` | Type-check without executing |
+| `just repl` | Launch interactive REPL |
+| `just bench` | Run benchmark suite |
+| `just test-adam` | Run inline expectation tests |
+| `just test-e2e` | Run pytest E2E integration tests |
+| `just fmt` | Format Rust code |
+| `just lint` | Lint Rust code |
+| `just clean` | Remove build artifacts |
+
+## Project Structure
+
+```
+adam-lang/
+├── compiler/                # Rust compiler
+│   └── src/
+│       ├── lexer.rs         # Tokenizer with span tracking
+│       ├── parser.rs        # Pratt parser + recursive descent
+│       ├── types.rs         # Hindley-Milner type inference
+│       ├── compiler.rs      # AST to bytecode compilation
+│       ├── bytecode.rs      # Bytecode format and serialization
+│       ├── ast.rs           # AST node definitions
+│       ├── token.rs         # Token types
+│       └── errors.rs        # Error types with source spans
+├── vm/                      # C virtual machine
+│   ├── include/adam/        # Public headers
+│   │   ├── value.h          # NaN-boxed value representation
+│   │   ├── vm.h             # VM API
+│   │   ├── gc.h             # Garbage collector
+│   │   ├── table.h          # Robin Hood hash table
+│   │   └── object.h         # Heap-allocated objects
+│   └── src/                 # Implementation
+│       ├── vm.c             # Dispatch loop (computed goto)
+│       ├── gc.c             # Tri-color mark-and-sweep
+│       ├── table.c          # Hash table with Robin Hood hashing
+│       └── value.c          # NaN boxing encode/decode
+├── tools/                   # TypeScript editor tooling
+│   ├── lsp/                 # Language Server Protocol server
+│   ├── playground/          # Browser playground (Monaco + interpreter)
+│   └── syntax/              # TextMate grammar
+├── stdlib/                  # Python tooling
+│   └── src/adam_tools/
+│       ├── runner.py        # CLI: compile + execute
+│       ├── repl.py          # Interactive REPL
+│       ├── test_runner.py   # Test framework
+│       └── benchmark.py     # Benchmark suite
+├── examples/                # Example Adam programs
+├── benchmarks/              # Performance benchmarks
+├── tests/                   # E2E integration tests
+├── docs/                    # Technical documentation
+└── Justfile                 # Build orchestration
+```
+
+## Documentation
+
+- [Architecture Overview](docs/architecture.md) -- system design and data flow
+- [Language Reference](docs/language-spec.md) -- grammar, types, and semantics
+- [VM Internals](docs/vm-internals.md) -- NaN boxing, GC, dispatch loop
+- [Compiler Pipeline](docs/compiler-pipeline.md) -- lexer, parser, type inference, codegen

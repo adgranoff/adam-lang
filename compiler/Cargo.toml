@@ -1,0 +1,18 @@
+[package]
+name = "adam-compiler"
+version = "0.1.0"
+edition = "2021"
+description = "Compiler for the Adam programming language"
+license = "MIT"
+
+[dependencies]
+miette = { version = "7", features = ["fancy"] }
+thiserror = "2"
+
+[dev-dependencies]
+insta = "1"
+pretty_assertions = "1"
+
+[[bin]]
+name = "adamc"
+path = "src/main.rs"

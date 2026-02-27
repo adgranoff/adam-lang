@@ -1,0 +1,12 @@
+// Benchmark: recursive Fibonacci(35)
+// Stress-tests function call overhead and recursion depth.
+
+fn fibonacci(n) {
+    if n <= 1 {
+        n
+    } else {
+        fibonacci(n - 1) + fibonacci(n - 2)
+    }
+}
+
+println(fibonacci(35))

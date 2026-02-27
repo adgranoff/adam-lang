@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adam Playground</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #f0f6fc;
+    }
+
+    header h1 span { color: #58a6ff; }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    button {
+      padding: 6px 16px;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      background: #21262d;
+      color: #c9d1d9;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button:hover { background: #30363d; }
+
+    button.primary {
+      background: #238636;
+      border-color: #2ea043;
+      color: #fff;
+    }
+
+    button.primary:hover { background: #2ea043; }
+
+    select {
+      padding: 6px 12px;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      background: #21262d;
+      color: #c9d1d9;
+      font-size: 14px;
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .editor-pane, .output-pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .pane-header {
+      padding: 8px 16px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #8b949e;
+    }
+
+    .output-pane { border-left: 1px solid #30363d; }
+
+    #editor { flex: 1; }
+
+    #output {
+      flex: 1;
+      padding: 16px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      background: #0d1117;
+    }
+
+    .output-line { color: #c9d1d9; }
+    .output-error { color: #f85149; }
+    .output-info { color: #8b949e; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span>Adam</span> Playground</h1>
+    <div class="controls">
+      <select id="examples">
+        <option value="">Load example...</option>
+      </select>
+      <button class="primary" id="run-btn">Run (Ctrl+Enter)</button>
+    </div>
+  </header>
+  <div class="main">
+    <div class="editor-pane">
+      <div class="pane-header">Source</div>
+      <div id="editor"></div>
+    </div>
+    <div class="output-pane">
+      <div class="pane-header">Output</div>
+      <div id="output"><span class="output-info">Click "Run" or press Ctrl+Enter to execute.</span></div>
+    </div>
+  </div>
+  <script type="module" src="/src/app.ts"></script>
+</body>
+</html>

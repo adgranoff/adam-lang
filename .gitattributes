@@ -1,0 +1,16 @@
+# Ensure consistent line endings
+* text=auto eol=lf
+
+# Shell scripts must be LF (critical for containers)
+*.sh text eol=lf
+
+# Windows batch files
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files
+*.adamb binary
+*.wasm binary
+*.png binary
+*.jpg binary
+*.gif binary

@@ -1,0 +1,51 @@
+# Build artifacts
+/vm/build/
+/compiler/target/
+/tools/lsp/node_modules/
+/tools/lsp/dist/
+/tools/playground/node_modules/
+/tools/playground/dist/
+/stdlib/.venv/
+
+# Compiled bytecode
+*.adamb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Rust
+*.pdb
+
+# C
+*.o
+*.obj
+*.exe
+*.out
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+
+# WASM
+*.wasm
+pkg/
