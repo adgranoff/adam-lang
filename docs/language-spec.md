@@ -9,7 +9,7 @@
 | String | `"hello"`, `""` | Immutable string (double-quoted) |
 | Bool | `true`, `false` | Boolean |
 | Nil | (implicit) | Absence of value |
-| Array | `[1, 2, 3]` | Ordered, mutable, heterogeneous |
+| Array | `[1, 2, 3]` | Ordered, mutable, homogeneous |
 | Function | `fn f(x) { x }` | First-class, supports closures |
 | Tensor | `tensor_zeros([2, 3])` | Multi-dimensional array of doubles |
 

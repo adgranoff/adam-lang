@@ -128,6 +128,7 @@ static Value abs_native(VM* vm, int arg_count, Value* args) {
 static bool extract_shape(Value val, int* out_shape, int* out_ndim) {
     if (!IS_ARRAY(val)) return false;
     ObjArray* arr = AS_ARRAY(val);
+    if (arr->count > 16) return false;  /* max 16 dimensions */
     *out_ndim = arr->count;
     for (int i = 0; i < arr->count; i++) {
         if (!IS_INT(arr->elements[i])) return false;
