@@ -689,6 +689,76 @@ impl TypeChecker {
             }),
         );
 
+        // print: accepts any type, returns Nil (same as println).
+        let p = self.subst.fresh_var();
+        let p_id = match &p {
+            Type::Var(id) => *id,
+            _ => unreachable!(),
+        };
+        self.env.bind(
+            "print".into(),
+            Scheme {
+                vars: vec![p_id],
+                ty: Type::Fn {
+                    params: vec![p],
+                    ret: Box::new(Type::Nil),
+                },
+            },
+        );
+
+        // type_of: α → String
+        let tof = self.subst.fresh_var();
+        let tof_id = match &tof { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "type_of".into(),
+            Scheme {
+                vars: vec![tof_id],
+                ty: Type::Fn { params: vec![tof], ret: Box::new(Type::Str) },
+            },
+        );
+
+        // to_int: α → Int (coerces Float/Bool/Int to Int)
+        let ti = self.subst.fresh_var();
+        let ti_id = match &ti { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "to_int".into(),
+            Scheme {
+                vars: vec![ti_id],
+                ty: Type::Fn { params: vec![ti], ret: Box::new(Type::Int) },
+            },
+        );
+
+        // to_float: α → Float
+        let tf = self.subst.fresh_var();
+        let tf_id = match &tf { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "to_float".into(),
+            Scheme {
+                vars: vec![tf_id],
+                ty: Type::Fn { params: vec![tf], ret: Box::new(Type::Float) },
+            },
+        );
+
+        // sqrt: Float → Float
+        self.env.bind(
+            "sqrt".into(),
+            Scheme::mono(Type::Fn {
+                params: vec![Type::Float],
+                ret: Box::new(Type::Float),
+            }),
+        );
+
+        // abs: α → α (works on Int and Float)
+        let ab = self.subst.fresh_var();
+        let ab_id = match &ab { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "abs".into(),
+            Scheme {
+                vars: vec![ab_id],
+                ty: Type::Fn { params: vec![ab.clone()], ret: Box::new(ab) },
+            },
+        );
+
         // Tensor builtins — use polymorphic types with fresh vars.
         // tensor_zeros: [Int] → Tensor (shape determined at runtime)
         let tz = self.subst.fresh_var();
@@ -799,6 +869,116 @@ impl TypeChecker {
                         Type::Array(Box::new(Type::Int)),
                     ],
                     ret: Box::new(tfa),
+                },
+            },
+        );
+
+        // tensor_exp: Tensor → Tensor
+        let te1 = self.subst.fresh_var();
+        let te2 = self.subst.fresh_var();
+        let te1_id = match &te1 { Type::Var(id) => *id, _ => unreachable!() };
+        let te2_id = match &te2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_exp".into(),
+            Scheme {
+                vars: vec![te1_id, te2_id],
+                ty: Type::Fn { params: vec![te1], ret: Box::new(te2) },
+            },
+        );
+        // tensor_log: Tensor → Tensor
+        let tl1 = self.subst.fresh_var();
+        let tl2 = self.subst.fresh_var();
+        let tl1_id = match &tl1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tl2_id = match &tl2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_log".into(),
+            Scheme {
+                vars: vec![tl1_id, tl2_id],
+                ty: Type::Fn { params: vec![tl1], ret: Box::new(tl2) },
+            },
+        );
+        // tensor_relu: Tensor → Tensor
+        let trl1 = self.subst.fresh_var();
+        let trl2 = self.subst.fresh_var();
+        let trl1_id = match &trl1 { Type::Var(id) => *id, _ => unreachable!() };
+        let trl2_id = match &trl2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_relu".into(),
+            Scheme {
+                vars: vec![trl1_id, trl2_id],
+                ty: Type::Fn { params: vec![trl1], ret: Box::new(trl2) },
+            },
+        );
+        // tensor_relu_backward: (Tensor, Tensor) → Tensor
+        let trb1 = self.subst.fresh_var();
+        let trb2 = self.subst.fresh_var();
+        let trb3 = self.subst.fresh_var();
+        let trb1_id = match &trb1 { Type::Var(id) => *id, _ => unreachable!() };
+        let trb2_id = match &trb2 { Type::Var(id) => *id, _ => unreachable!() };
+        let trb3_id = match &trb3 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_relu_backward".into(),
+            Scheme {
+                vars: vec![trb1_id, trb2_id, trb3_id],
+                ty: Type::Fn { params: vec![trb1, trb2], ret: Box::new(trb3) },
+            },
+        );
+        // tensor_max: Tensor → Float
+        let tmx = self.subst.fresh_var();
+        let tmx_id = match &tmx { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_max".into(),
+            Scheme {
+                vars: vec![tmx_id],
+                ty: Type::Fn { params: vec![tmx], ret: Box::new(Type::Float) },
+            },
+        );
+        // tensor_sum_axis: (Tensor, Int) → Tensor
+        let tsa1 = self.subst.fresh_var();
+        let tsa2 = self.subst.fresh_var();
+        let tsa1_id = match &tsa1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tsa2_id = match &tsa2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_sum_axis".into(),
+            Scheme {
+                vars: vec![tsa1_id, tsa2_id],
+                ty: Type::Fn { params: vec![tsa1, Type::Int], ret: Box::new(tsa2) },
+            },
+        );
+        // tensor_slice: (Tensor, Int, Int) → Tensor
+        let tsl1 = self.subst.fresh_var();
+        let tsl2 = self.subst.fresh_var();
+        let tsl1_id = match &tsl1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tsl2_id = match &tsl2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_slice".into(),
+            Scheme {
+                vars: vec![tsl1_id, tsl2_id],
+                ty: Type::Fn { params: vec![tsl1, Type::Int, Type::Int], ret: Box::new(tsl2) },
+            },
+        );
+        // tensor_one_hot: (Tensor, Int) → Tensor
+        let toh1 = self.subst.fresh_var();
+        let toh2 = self.subst.fresh_var();
+        let toh1_id = match &toh1 { Type::Var(id) => *id, _ => unreachable!() };
+        let toh2_id = match &toh2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_one_hot".into(),
+            Scheme {
+                vars: vec![toh1_id, toh2_id],
+                ty: Type::Fn { params: vec![toh1, Type::Int], ret: Box::new(toh2) },
+            },
+        );
+        // tensor_load: String → Tensor
+        let tld = self.subst.fresh_var();
+        let tld_id = match &tld { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_load".into(),
+            Scheme {
+                vars: vec![tld_id],
+                ty: Type::Fn {
+                    params: vec![Type::Str],
+                    ret: Box::new(tld),
                 },
             },
         );
@@ -1215,26 +1395,34 @@ impl TypeChecker {
                 match op {
                     // Arithmetic: both operands must be numeric, result is same type.
                     BinOp::Add => {
-                        // Add is special: works on Int, Float, String, or Tensor.
-                        // Use a fresh var and unify both sides.
-                        let result = self.subst.fresh_var();
-                        self.unify(&lt, &rt, expr.span);
-                        self.unify(&lt, &result, expr.span);
-                        // Verify it's a valid type for addition.
-                        let resolved = self.subst.resolve(&result);
-                        match resolved {
-                            Type::Int | Type::Float | Type::Str | Type::Tensor { .. } | Type::Var(_) => {}
+                        // Add: works on Int, Float, String, Tensor, or mixed Tensor+scalar.
+                        let lt_r = self.subst.deep_resolve(&lt);
+                        let rt_r = self.subst.deep_resolve(&rt);
+                        match (&lt_r, &rt_r) {
+                            // Tensor-scalar broadcast: result is the tensor type
+                            (Type::Tensor { .. }, Type::Int | Type::Float) => lt,
+                            (Type::Int | Type::Float, Type::Tensor { .. }) => rt,
                             _ => {
-                                self.errors.push(TypeError {
-                                    message: format!(
-                                        "Operator + not supported for type {}",
-                                        resolved
-                                    ),
-                                    span: expr.span,
-                                });
+                                // Normal: unify both sides
+                                let result = self.subst.fresh_var();
+                                self.unify(&lt, &rt, expr.span);
+                                self.unify(&lt, &result, expr.span);
+                                let resolved = self.subst.resolve(&result);
+                                match resolved {
+                                    Type::Int | Type::Float | Type::Str | Type::Tensor { .. } | Type::Var(_) => {}
+                                    _ => {
+                                        self.errors.push(TypeError {
+                                            message: format!(
+                                                "Operator + not supported for type {}",
+                                                resolved
+                                            ),
+                                            span: expr.span,
+                                        });
+                                    }
+                                }
+                                result
                             }
                         }
-                        result
                     }
                     // Matrix multiply shape algebra:
                     //   Tensor<D, [.., M, K]> @@ Tensor<D, [K, N]> → Tensor<D, [.., M, N]>
@@ -1354,22 +1542,35 @@ impl TypeChecker {
                     }
 
                     BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::Pow => {
-                        // Numeric or tensor element-wise ops. Both sides must unify.
-                        self.unify(&lt, &rt, expr.span);
-                        let resolved = self.subst.resolve(&lt);
-                        match resolved {
-                            Type::Int | Type::Float | Type::Tensor { .. } | Type::Var(_) => {}
+                        // Numeric or tensor element-wise ops. Support tensor-scalar broadcast.
+                        let lt_r = self.subst.deep_resolve(&lt);
+                        let rt_r = self.subst.deep_resolve(&rt);
+                        match (&lt_r, &rt_r) {
+                            // Tensor-scalar broadcast: result is the tensor type
+                            (Type::Tensor { .. }, Type::Int | Type::Float) => lt,
+                            (Type::Int | Type::Float, Type::Tensor { .. }) => rt,
+                            // Var + numeric: don't unify (var might be a tensor)
+                            (Type::Var(_), Type::Int | Type::Float) => lt,
+                            (Type::Int | Type::Float, Type::Var(_)) => rt,
                             _ => {
-                                self.errors.push(TypeError {
-                                    message: format!(
-                                        "Arithmetic operator not supported for type {}",
-                                        resolved
-                                    ),
-                                    span: expr.span,
-                                });
+                                // Same-type: unify both sides
+                                self.unify(&lt, &rt, expr.span);
+                                let resolved = self.subst.resolve(&lt);
+                                match resolved {
+                                    Type::Int | Type::Float | Type::Tensor { .. } | Type::Var(_) => {}
+                                    _ => {
+                                        self.errors.push(TypeError {
+                                            message: format!(
+                                                "Arithmetic operator not supported for type {}",
+                                                resolved
+                                            ),
+                                            span: expr.span,
+                                        });
+                                    }
+                                }
+                                lt
                             }
                         }
-                        lt
                     }
 
                     // Comparison: both operands must be same type, result is Bool.

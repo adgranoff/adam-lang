@@ -19,9 +19,9 @@
 #include <time.h>
 
 /* Maximum depth of the value stack. Each function call uses a portion
- * of this shared stack (its "window" starts at frame->slots). 256 slots
- * is generous for non-pathological programs. */
-#define ADAM_STACK_MAX 256
+ * of this shared stack (its "window" starts at frame->slots). 1024 slots
+ * is needed for programs with many local variables like MNIST training. */
+#define ADAM_STACK_MAX 1024
 
 /* Maximum call depth. Prevents infinite recursion from eating all memory
  * before we can report a useful error. */

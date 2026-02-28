@@ -283,6 +283,27 @@ x * y    // element-wise multiply (Hadamard product)
 -x       // element-wise negate
 ```
 
+### Tensor-Scalar Broadcasting
+
+Arithmetic operators support mixed tensor-scalar operands:
+
+```
+let w = tensor_randn([784, 128]) * 0.047  // scale every element
+let shifted = logits - 5.0                 // subtract scalar from tensor
+```
+
+### 2D Broadcasting
+
+Tensors with compatible shapes broadcast automatically:
+
+```
+let a = tensor_ones([4, 10])        // [4, 10]
+let b = tensor_ones([1, 10])        // [1, 10] — row broadcast
+let c = tensor_ones([4, 1])         // [4, 1]  — column broadcast
+a + b    // [4,10] + [1,10] -> repeats b across 4 rows
+a / c    // [4,10] / [4,1]  -> repeats c across 10 columns
+```
+
 ### Tensor Built-in Functions
 
 | Function | Signature | Description |
@@ -294,7 +315,16 @@ x * y    // element-wise multiply (Hadamard product)
 | `tensor_shape` | `(Tensor) -> [Int]` | Get shape as array |
 | `tensor_reshape` | `(Tensor, [Int]) -> Tensor` | Reshape (element count must match) |
 | `tensor_sum` | `(Tensor) -> Float` | Sum all elements to scalar |
+| `tensor_sum_axis` | `(Tensor, Int) -> Tensor` | Sum along axis (0=columns, 1=rows) |
 | `tensor_transpose` | `(Tensor) -> Tensor` | Transpose 2D tensor |
+| `tensor_exp` | `(Tensor) -> Tensor` | Element-wise exp |
+| `tensor_log` | `(Tensor) -> Tensor` | Element-wise natural log |
+| `tensor_relu` | `(Tensor) -> Tensor` | Element-wise max(0, x) |
+| `tensor_relu_backward` | `(Tensor, Tensor) -> Tensor` | ReLU gradient (grad where z > 0) |
+| `tensor_max` | `(Tensor) -> Float` | Maximum element |
+| `tensor_slice` | `(Tensor, Int, Int) -> Tensor` | Extract rows [start, start+count) |
+| `tensor_one_hot` | `(Tensor, Int) -> Tensor` | Convert label indices to one-hot |
+| `tensor_load` | `(String) -> Tensor` | Load tensor from binary file |
 
 ## Automatic Differentiation
 

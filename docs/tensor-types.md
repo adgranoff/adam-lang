@@ -62,3 +62,20 @@ When unifying `Tensor<D1, S1>` with `Tensor<D2, S2>`:
 | Idris/Agda | Full dependent types | Not practical for ML |
 
 Adam's approach is right-sized: dimension variables are powerful enough to catch real shape errors but simple enough to integrate into an existing HM type checker without making inference undecidable.
+
+## Runtime Broadcasting
+
+At runtime, the VM supports NumPy-style broadcasting for 2D tensor arithmetic:
+
+| Operand A | Operand B | Broadcast Rule |
+|-----------|-----------|----------------|
+| `[M, N]` | `[M, N]` | Element-wise (no broadcast) |
+| `[M, N]` | `[1, N]` | Row broadcast — repeat b's row M times |
+| `[M, N]` | `[M, 1]` | Column broadcast — repeat b's column N times |
+| `[M, N]` | scalar | Scalar broadcast — apply to every element |
+
+The broadcast index is computed by `broadcast_idx()` in `vm.c`, which checks shapes to distinguish row vs column broadcasting. This is essential for operations like softmax normalization (`exps / sum_exps` where shapes are `[32,10] / [32,1]`).
+
+## Practical Validation
+
+The tensor type system and runtime are validated by the MNIST demo (`examples/mnist.adam`), which trains a 784->128->10 neural network to 97.2% accuracy using tensor operations for forward pass, backpropagation, and SGD weight updates. See [MNIST Demo](mnist.md) for details.

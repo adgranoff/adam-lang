@@ -42,7 +42,7 @@ A stack-based bytecode interpreter optimized for throughput:
 - **Garbage Collector** (`gc.c`): Tri-color mark-and-sweep collector. Objects are white (unmarked), gray (marked but children unvisited), or black (fully traced). Collection is triggered when allocation exceeds a threshold.
 - **Hash Table** (`table.c`): Open-addressing table with Robin Hood hashing and FNV-1a hash function. Used for global variables and string interning.
 - **Objects** (`object.c`): Heap-allocated types include strings (interned), closures, upvalues, arrays, and tensors. All objects are linked into a list for GC traversal.
-- **Tensor Runtime** (`native.c`, `vm.c`): ObjTensor stores multi-dimensional float arrays. Native functions provide creation (`tensor_zeros`, `tensor_ones`, `tensor_randn`), manipulation (`tensor_reshape`, `tensor_transpose`), and reduction (`tensor_sum`). Opcodes `OP_TENSOR_MATMUL`, `OP_TENSOR_ADD`, `OP_TENSOR_SUB`, `OP_TENSOR_MUL`, and `OP_TENSOR_NEG` handle element-wise and matrix operations.
+- **Tensor Runtime** (`native.c`, `vm.c`): ObjTensor stores multi-dimensional float arrays. Native functions provide creation (`tensor_zeros`, `tensor_ones`, `tensor_randn`), manipulation (`tensor_reshape`, `tensor_transpose`, `tensor_slice`), reduction (`tensor_sum`, `tensor_sum_axis`, `tensor_max`), math (`tensor_exp`, `tensor_log`, `tensor_relu`), and I/O (`tensor_load`). Arithmetic operators support tensor-scalar and 2D broadcasting. Opcodes `OP_TENSOR_MATMUL`, `OP_TENSOR_ADD`, `OP_TENSOR_SUB`, `OP_TENSOR_MUL`, and `OP_TENSOR_NEG` handle element-wise and matrix operations.
 
 ### Tooling (Python)
 

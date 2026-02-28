@@ -10,9 +10,13 @@
 # Compiled bytecode
 *.adamb
 
+# MNIST data (downloaded via `just prepare-mnist`)
+/data/
+
 # OS
 .DS_Store
 Thumbs.db
+.tmp/
 
 # IDE
 .vscode/

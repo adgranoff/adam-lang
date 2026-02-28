@@ -17,7 +17,9 @@ build-all: build build-lsp build-playground
 
 # Build the C virtual machine
 build-vm:
-    cd vm && cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release && cmake --build build
+    #!/usr/bin/env bash
+    export PATH="/c/msys64/mingw64/bin:$PATH"
+    cd vm && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build
 
 # Build the Rust compiler
 build-compiler:
@@ -77,6 +79,18 @@ build-playground:
 # Start playground dev server
 playground-dev:
     cd tools/playground && npm run dev
+
+# ─── MNIST ──────────────────────────────────────────────────────────────────
+
+# Download and prepare MNIST data
+prepare-mnist:
+    cd stdlib && uv run --with scikit-learn python -m adam_tools.prepare_mnist
+
+# Train MNIST neural network (run from project root so data/ paths resolve)
+mnist: build
+    #!/usr/bin/env bash
+    export PATH="$HOME/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
+    compiler/target/release/adamc compile examples/mnist.adam -o .tmp/mnist.adamb && vm/build/adam-vm.exe .tmp/mnist.adamb
 
 # Clean all build artifacts
 clean:

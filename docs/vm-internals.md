@@ -149,6 +149,17 @@ struct Obj {
 | ObjClosure | function, upvalues[] | Function + captured environment |
 | ObjUpvalue | location, closed, next | Captured variable (open or closed) |
 | ObjArray | elements[], count, capacity | Dynamic array |
+| ObjTensor | ndim, shape[], data[], count | Multi-dimensional float array |
+
+### Tensor Allocation and GC Safety
+
+`ObjTensor` requires three separate allocations: the object header, the shape array, and the data array. Because any allocation can trigger garbage collection, `adam_new_tensor` must:
+
+1. Zero all fields (`ndim`, `count`, `shape`, `data`) immediately after `ALLOCATE_OBJ`, before any sub-allocation. This prevents the GC sweep from freeing garbage pointers on a partially-initialized tensor.
+
+2. Push the tensor onto the VM stack as a GC root before allocating `shape` and `data`. Without this, the GC would see the tensor in `vm->objects` but not reachable from any root, and sweep it as dead.
+
+This pattern is critical for large tensors (MNIST training allocates ~440MB of tensor data).
 
 ### String Interning
 

@@ -92,17 +92,22 @@ def run_compile(
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
-def run_vm(vm: Path, bytecode: Path) -> subprocess.CompletedProcess[str]:
+def run_vm(
+    vm: Path, bytecode: Path, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
     """Execute a .adamb bytecode file in the VM.
 
     Args:
         vm: Path to the adam-vm binary.
         bytecode: Path to the .adamb file.
+        cwd: Working directory for the VM process (None = inherit).
 
     Returns:
         CompletedProcess with stdout/stderr.
     """
-    return subprocess.run([str(vm), str(bytecode)], capture_output=True, text=True)
+    return subprocess.run(
+        [str(vm), str(bytecode)], capture_output=True, text=True, cwd=cwd
+    )
 
 
 def run_file(
@@ -131,7 +136,7 @@ def run_file(
         if result.returncode != 0:
             return "", result.stderr, result.returncode
 
-        result = run_vm(vm, bytecode_path)
+        result = run_vm(vm, bytecode_path, cwd=root)
         return result.stdout, result.stderr, result.returncode
     finally:
         bytecode_path.unlink(missing_ok=True)

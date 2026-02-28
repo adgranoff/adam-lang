@@ -249,6 +249,180 @@ static Value tensor_transpose_native(VM* vm, int arg_count, Value* args) {
     return OBJ_VAL(result);
 }
 
+/* ── MNIST tensor natives ──────────────────────────────────────────── */
+
+static Value tensor_exp_native(VM* vm, int arg_count, Value* args) {
+    if (arg_count != 1 || !IS_TENSOR(args[0])) return NIL_VAL;
+    ObjTensor* src = AS_TENSOR(args[0]);
+    ObjTensor* result = adam_new_tensor(vm, src->ndim, src->shape);
+    for (int i = 0; i < src->count; i++) {
+        result->data[i] = exp(src->data[i]);
+    }
+    return OBJ_VAL(result);
+}
+
+static Value tensor_log_native(VM* vm, int arg_count, Value* args) {
+    if (arg_count != 1 || !IS_TENSOR(args[0])) return NIL_VAL;
+    ObjTensor* src = AS_TENSOR(args[0]);
+    ObjTensor* result = adam_new_tensor(vm, src->ndim, src->shape);
+    for (int i = 0; i < src->count; i++) {
+        result->data[i] = log(src->data[i]);
+    }
+    return OBJ_VAL(result);
+}
+
+static Value tensor_relu_native(VM* vm, int arg_count, Value* args) {
+    if (arg_count != 1 || !IS_TENSOR(args[0])) return NIL_VAL;
+    ObjTensor* src = AS_TENSOR(args[0]);
+    ObjTensor* result = adam_new_tensor(vm, src->ndim, src->shape);
+    for (int i = 0; i < src->count; i++) {
+        result->data[i] = src->data[i] > 0.0 ? src->data[i] : 0.0;
+    }
+    return OBJ_VAL(result);
+}
+
+static Value tensor_relu_backward_native(VM* vm, int arg_count, Value* args) {
+    /* tensor_relu_backward(pre_activation, upstream_grad) → Tensor
+     * Gradient is upstream_grad where pre_activation > 0, else 0. */
+    if (arg_count != 2 || !IS_TENSOR(args[0]) || !IS_TENSOR(args[1])) return NIL_VAL;
+    ObjTensor* z = AS_TENSOR(args[0]);
+    ObjTensor* dout = AS_TENSOR(args[1]);
+    if (z->count != dout->count) return NIL_VAL;
+    ObjTensor* result = adam_new_tensor(vm, z->ndim, z->shape);
+    for (int i = 0; i < z->count; i++) {
+        result->data[i] = z->data[i] > 0.0 ? dout->data[i] : 0.0;
+    }
+    return OBJ_VAL(result);
+}
+
+static Value tensor_max_native(VM* vm, int arg_count, Value* args) {
+    (void)vm;
+    if (arg_count != 1 || !IS_TENSOR(args[0])) return NIL_VAL;
+    ObjTensor* t = AS_TENSOR(args[0]);
+    if (t->count == 0) return FLOAT_VAL(0.0);
+    double max_val = t->data[0];
+    for (int i = 1; i < t->count; i++) {
+        if (t->data[i] > max_val) max_val = t->data[i];
+    }
+    return FLOAT_VAL(max_val);
+}
+
+static Value tensor_sum_axis_native(VM* vm, int arg_count, Value* args) {
+    /* tensor_sum_axis(tensor, axis) → Tensor
+     * For 2D: axis=0 sums columns (result shape [1, cols]),
+     *         axis=1 sums rows (result shape [rows, 1]). */
+    if (arg_count != 2 || !IS_TENSOR(args[0]) || !IS_INT(args[1])) return NIL_VAL;
+    ObjTensor* t = AS_TENSOR(args[0]);
+    int axis = AS_INT(args[1]);
+    if (t->ndim != 2 || axis < 0 || axis >= t->ndim) return NIL_VAL;
+    int rows = t->shape[0];
+    int cols = t->shape[1];
+    if (axis == 0) {
+        /* Sum along rows → result shape [1, cols] */
+        int shape[2] = {1, cols};
+        ObjTensor* result = adam_new_tensor(vm, 2, shape);
+        for (int j = 0; j < cols; j++) {
+            double sum = 0.0;
+            for (int i = 0; i < rows; i++) {
+                sum += t->data[i * cols + j];
+            }
+            result->data[j] = sum;
+        }
+        return OBJ_VAL(result);
+    } else {
+        /* Sum along cols → result shape [rows, 1] */
+        int shape[2] = {rows, 1};
+        ObjTensor* result = adam_new_tensor(vm, 2, shape);
+        for (int i = 0; i < rows; i++) {
+            double sum = 0.0;
+            for (int j = 0; j < cols; j++) {
+                sum += t->data[i * cols + j];
+            }
+            result->data[i] = sum;
+        }
+        return OBJ_VAL(result);
+    }
+}
+
+static Value tensor_slice_native(VM* vm, int arg_count, Value* args) {
+    /* tensor_slice(tensor, start_row, count) → Tensor
+     * Extract rows [start, start+count) from a 2D tensor. */
+    if (arg_count != 3 || !IS_TENSOR(args[0])) return NIL_VAL;
+    ObjTensor* t = AS_TENSOR(args[0]);
+    int start = IS_INT(args[1]) ? AS_INT(args[1]) : (int)adam_as_number(args[1]);
+    int count = IS_INT(args[2]) ? AS_INT(args[2]) : (int)adam_as_number(args[2]);
+    if (t->ndim == 1) {
+        /* 1D tensor: slice elements */
+        if (start < 0 || start + count > t->count) return NIL_VAL;
+        int shape[1] = {count};
+        ObjTensor* result = adam_new_tensor(vm, 1, shape);
+        memcpy(result->data, t->data + start, sizeof(double) * count);
+        return OBJ_VAL(result);
+    }
+    if (t->ndim != 2) return NIL_VAL;
+    int cols = t->shape[1];
+    if (start < 0 || start + count > t->shape[0]) return NIL_VAL;
+    int shape[2] = {count, cols};
+    ObjTensor* result = adam_new_tensor(vm, 2, shape);
+    memcpy(result->data, t->data + start * cols, sizeof(double) * count * cols);
+    return OBJ_VAL(result);
+}
+
+static Value tensor_one_hot_native(VM* vm, int arg_count, Value* args) {
+    /* tensor_one_hot(labels, num_classes) → Tensor
+     * labels is a 1D tensor of integer class indices, result is [N, num_classes]. */
+    if (arg_count != 2 || !IS_TENSOR(args[0]) || !IS_INT(args[1])) return NIL_VAL;
+    ObjTensor* labels = AS_TENSOR(args[0]);
+    int num_classes = AS_INT(args[1]);
+    int n = labels->count;
+    int shape[2] = {n, num_classes};
+    ObjTensor* result = adam_new_tensor(vm, 2, shape);
+    /* adam_new_tensor zeroes data */
+    for (int i = 0; i < n; i++) {
+        int cls = (int)labels->data[i];
+        if (cls >= 0 && cls < num_classes) {
+            result->data[i * num_classes + cls] = 1.0;
+        }
+    }
+    return OBJ_VAL(result);
+}
+
+static Value tensor_load_native(VM* vm, int arg_count, Value* args) {
+    /* tensor_load(path) → Tensor
+     * Binary format: [ndim:i32][shape[0]:i32]...[shape[n]:i32][data:f64*] */
+    if (arg_count != 1 || !IS_STRING(args[0])) return NIL_VAL;
+    const char* path = AS_CSTRING(args[0]);
+    FILE* f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "tensor_load: cannot open '%s'\n", path);
+        fprintf(stderr, "Run 'just prepare-mnist' to download MNIST data first.\n");
+        exit(1);
+    }
+    int32_t ndim;
+    if (fread(&ndim, sizeof(int32_t), 1, f) != 1 || ndim <= 0 || ndim > 16) {
+        fclose(f);
+        return NIL_VAL;
+    }
+    int shape[16];
+    int count = 1;
+    for (int i = 0; i < ndim; i++) {
+        int32_t dim;
+        if (fread(&dim, sizeof(int32_t), 1, f) != 1) { fclose(f); return NIL_VAL; }
+        shape[i] = dim;
+        count *= dim;
+    }
+    ObjTensor* tensor = adam_new_tensor(vm, ndim, shape);
+    adam_vm_push(vm, OBJ_VAL(tensor)); /* GC protect */
+    if ((int)fread(tensor->data, sizeof(double), count, f) != count) {
+        adam_vm_pop(vm);
+        fclose(f);
+        return NIL_VAL;
+    }
+    fclose(f);
+    adam_vm_pop(vm);
+    return OBJ_VAL(tensor);
+}
+
 /* ── Registration ──────────────────────────────────────────────────── */
 
 void adam_register_natives(VM* vm) {
@@ -271,4 +445,15 @@ void adam_register_natives(VM* vm) {
     define_native(vm, "tensor_reshape",   tensor_reshape_native);
     define_native(vm, "tensor_sum",       tensor_sum_native);
     define_native(vm, "tensor_transpose", tensor_transpose_native);
+
+    /* MNIST tensor natives */
+    define_native(vm, "tensor_exp",           tensor_exp_native);
+    define_native(vm, "tensor_log",           tensor_log_native);
+    define_native(vm, "tensor_relu",          tensor_relu_native);
+    define_native(vm, "tensor_relu_backward", tensor_relu_backward_native);
+    define_native(vm, "tensor_max",           tensor_max_native);
+    define_native(vm, "tensor_sum_axis",      tensor_sum_axis_native);
+    define_native(vm, "tensor_slice",         tensor_slice_native);
+    define_native(vm, "tensor_one_hot",       tensor_one_hot_native);
+    define_native(vm, "tensor_load",          tensor_load_native);
 }

@@ -27,9 +27,13 @@ just check examples/calculator.adam
 # Run all tests
 just test
 
+# MNIST training
+just prepare-mnist             # Download MNIST dataset
+just mnist                     # Train and evaluate (~2 min)
+
 # Run specific test suites
-cd compiler && cargo test          # Rust unit tests (75 tests)
-cd tests && uv run pytest -v      # Python E2E tests
+cd compiler && cargo test          # Rust unit tests (88 tests)
+cd tests && uv run pytest -v      # Python E2E tests (16 tests)
 cd tools/playground && npx tsc --noEmit  # TypeScript type check
 ```
 
@@ -73,6 +77,7 @@ The compiler and VM are separate executables. Python orchestrates them.
 | `tools/playground/src/interpreter.ts` | Browser tree-walking interpreter |
 | `tools/playground/src/examples.ts` | Playground example programs |
 | `stdlib/src/adam_tools/runner.py` | CLI compile + execute orchestrator |
+| `stdlib/src/adam_tools/prepare_mnist.py` | MNIST data download and binary conversion |
 | `tests/test_e2e.py` | Pytest E2E tests with inline `// expect:` assertions |
 
 ## Critical Invariants
@@ -87,11 +92,14 @@ The compiler and VM are separate executables. Python orchestrates them.
 
 5. **String interning**: All ObjStrings are interned in `vm->strings`. Pointer equality == string equality.
 
+6. **GC safety in `adam_new_tensor`**: The tensor is pushed onto the VM stack as a GC root before sub-allocations (`shape` and `data` arrays). Fields are zeroed before any allocation that could trigger GC. Without this, the GC can sweep the partially-initialized tensor or free garbage pointers.
+
 ## Tensor System
 
 - **Type checking**: `Tensor<DType, [dims]>` syntax with dimension variables (N, M, K). Compile-time shape verification via dimension unification in `types.rs`.
 - **Runtime**: `ObjTensor` in C with `ndim`, `shape[]`, `data[]`. Naive triple-loop matmul.
 - **Autograd**: `grad(f)` is a compiler intrinsic. `autograd.rs` transforms the AST of `f` into forward + backward passes. No runtime tape.
+- **MNIST demo**: `examples/mnist.adam` trains a 2-layer neural network (784->128->10) to 97.2% accuracy using manual backpropagation and built-in tensor operations. See [docs/mnist.md](docs/mnist.md).
 
 ## Testing Conventions
 
@@ -119,3 +127,8 @@ The compiler and VM are separate executables. Python orchestrates them.
 3. Type check in `types.rs`
 4. Compile in `compiler.rs`
 5. Handle in playground `interpreter.ts`
+
+### Running MNIST
+1. Download data: `just prepare-mnist` (requires scikit-learn, downloads ~15MB)
+2. Train: `just mnist` (compiles `examples/mnist.adam` and runs it, ~2 minutes)
+3. Expected output: loss decreasing from ~0.29 to ~0.065, test accuracy ~97%

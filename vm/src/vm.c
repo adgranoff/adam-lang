@@ -42,6 +42,24 @@
 #include "adam/debug.h"
 #include "adam/native.h"
 
+/* ── Tensor broadcasting ──────────────────────────────────────────── */
+
+/* Compute the index into b's data when broadcasting b into a's shape.
+ *   [M,N] op [1,N]  → row broadcast:    b_idx = i % N
+ *   [M,N] op [M,1]  → column broadcast: b_idx = i / N
+ *   fallback         → modular:          b_idx = i % b_count            */
+static inline int broadcast_idx(int a_ndim, const int* a_shape,
+                                int b_ndim, const int* b_shape,
+                                int b_count, int i) {
+    if (a_ndim == 2 && b_ndim == 2) {
+        if (b_shape[0] == 1)
+            return i % a_shape[1];   /* row broadcast [M,N]+[1,N] */
+        if (b_shape[1] == 1)
+            return i / a_shape[1];   /* column broadcast [M,N]+[M,1] */
+    }
+    return i % b_count;
+}
+
 /* ── VM lifecycle ──────────────────────────────────────────────────── */
 
 void adam_vm_init(VM* vm) {
@@ -308,18 +326,50 @@ static InterpretResult run(VM* vm) {
         } else if (IS_TENSOR(peek(vm, 0)) && IS_TENSOR(peek(vm, 1))) {
             ObjTensor* b = AS_TENSOR(peek(vm, 0));
             ObjTensor* a = AS_TENSOR(peek(vm, 1));
-            if (a->count != b->count) {
+            if (a->count == b->count) {
+                ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+                adam_vm_push(vm, OBJ_VAL(result));
+                for (int i = 0; i < a->count; i++)
+                    result->data[i] = a->data[i] + b->data[i];
+                adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+                adam_vm_push(vm, OBJ_VAL(result));
+            } else if (b->count > 0 && a->count % b->count == 0) {
+                /* broadcast b into a's shape: e.g. [M,N] + [1,N] */
+                ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+                adam_vm_push(vm, OBJ_VAL(result));
+                for (int i = 0; i < a->count; i++)
+                    result->data[i] = a->data[i] + b->data[broadcast_idx(a->ndim, a->shape, b->ndim, b->shape, b->count, i)];
+                adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+                adam_vm_push(vm, OBJ_VAL(result));
+            } else if (a->count > 0 && b->count % a->count == 0) {
+                /* broadcast a into b's shape */
+                ObjTensor* result = adam_new_tensor(vm, b->ndim, b->shape);
+                adam_vm_push(vm, OBJ_VAL(result));
+                for (int i = 0; i < b->count; i++)
+                    result->data[i] = a->data[broadcast_idx(b->ndim, b->shape, a->ndim, a->shape, a->count, i)] + b->data[i];
+                adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+                adam_vm_push(vm, OBJ_VAL(result));
+            } else {
                 runtime_error(vm, "Shape mismatch in tensor add.");
                 return INTERPRET_RUNTIME_ERROR;
             }
-            ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+        } else if (IS_NUMBER(peek(vm, 0)) && IS_TENSOR(peek(vm, 1))) {
+            /* tensor + scalar */
+            double s = adam_as_number(peek(vm, 0));
+            ObjTensor* t = AS_TENSOR(peek(vm, 1));
+            ObjTensor* result = adam_new_tensor(vm, t->ndim, t->shape);
             adam_vm_push(vm, OBJ_VAL(result));
-            for (int i = 0; i < a->count; i++) {
-                result->data[i] = a->data[i] + b->data[i];
-            }
-            adam_vm_pop(vm);
-            adam_vm_pop(vm);
-            adam_vm_pop(vm);
+            for (int i = 0; i < t->count; i++) result->data[i] = t->data[i] + s;
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else if (IS_TENSOR(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {
+            /* scalar + tensor */
+            ObjTensor* t = AS_TENSOR(peek(vm, 0));
+            double s = adam_as_number(peek(vm, 1));
+            ObjTensor* result = adam_new_tensor(vm, t->ndim, t->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < t->count; i++) result->data[i] = s + t->data[i];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
             adam_vm_push(vm, OBJ_VAL(result));
         } else if (IS_INT(peek(vm, 0)) && IS_INT(peek(vm, 1))) {
             int32_t b = AS_INT(adam_vm_pop(vm));
@@ -340,18 +390,48 @@ static InterpretResult run(VM* vm) {
         if (IS_TENSOR(peek(vm, 0)) && IS_TENSOR(peek(vm, 1))) {
             ObjTensor* b = AS_TENSOR(peek(vm, 0));
             ObjTensor* a = AS_TENSOR(peek(vm, 1));
-            if (a->count != b->count) {
+            if (a->count == b->count) {
+                ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+                adam_vm_push(vm, OBJ_VAL(result));
+                for (int i = 0; i < a->count; i++)
+                    result->data[i] = a->data[i] - b->data[i];
+                adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+                adam_vm_push(vm, OBJ_VAL(result));
+            } else if (b->count > 0 && a->count % b->count == 0) {
+                ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+                adam_vm_push(vm, OBJ_VAL(result));
+                for (int i = 0; i < a->count; i++)
+                    result->data[i] = a->data[i] - b->data[broadcast_idx(a->ndim, a->shape, b->ndim, b->shape, b->count, i)];
+                adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+                adam_vm_push(vm, OBJ_VAL(result));
+            } else if (a->count > 0 && b->count % a->count == 0) {
+                ObjTensor* result = adam_new_tensor(vm, b->ndim, b->shape);
+                adam_vm_push(vm, OBJ_VAL(result));
+                for (int i = 0; i < b->count; i++)
+                    result->data[i] = a->data[broadcast_idx(b->ndim, b->shape, a->ndim, a->shape, a->count, i)] - b->data[i];
+                adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+                adam_vm_push(vm, OBJ_VAL(result));
+            } else {
                 runtime_error(vm, "Shape mismatch in tensor sub.");
                 return INTERPRET_RUNTIME_ERROR;
             }
-            ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+        } else if (IS_NUMBER(peek(vm, 0)) && IS_TENSOR(peek(vm, 1))) {
+            /* tensor - scalar */
+            double s = adam_as_number(peek(vm, 0));
+            ObjTensor* t = AS_TENSOR(peek(vm, 1));
+            ObjTensor* result = adam_new_tensor(vm, t->ndim, t->shape);
             adam_vm_push(vm, OBJ_VAL(result));
-            for (int i = 0; i < a->count; i++) {
-                result->data[i] = a->data[i] - b->data[i];
-            }
-            adam_vm_pop(vm);
-            adam_vm_pop(vm);
-            adam_vm_pop(vm);
+            for (int i = 0; i < t->count; i++) result->data[i] = t->data[i] - s;
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else if (IS_TENSOR(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {
+            /* scalar - tensor */
+            ObjTensor* t = AS_TENSOR(peek(vm, 0));
+            double s = adam_as_number(peek(vm, 1));
+            ObjTensor* result = adam_new_tensor(vm, t->ndim, t->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < t->count; i++) result->data[i] = s - t->data[i];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
             adam_vm_push(vm, OBJ_VAL(result));
         } else if (IS_INT(peek(vm, 0)) && IS_INT(peek(vm, 1))) {
             int32_t b = AS_INT(adam_vm_pop(vm));
@@ -372,18 +452,48 @@ static InterpretResult run(VM* vm) {
         if (IS_TENSOR(peek(vm, 0)) && IS_TENSOR(peek(vm, 1))) {
             ObjTensor* b = AS_TENSOR(peek(vm, 0));
             ObjTensor* a = AS_TENSOR(peek(vm, 1));
-            if (a->count != b->count) {
+            if (a->count == b->count) {
+                ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+                adam_vm_push(vm, OBJ_VAL(result));
+                for (int i = 0; i < a->count; i++)
+                    result->data[i] = a->data[i] * b->data[i];
+                adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+                adam_vm_push(vm, OBJ_VAL(result));
+            } else if (b->count > 0 && a->count % b->count == 0) {
+                ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+                adam_vm_push(vm, OBJ_VAL(result));
+                for (int i = 0; i < a->count; i++)
+                    result->data[i] = a->data[i] * b->data[broadcast_idx(a->ndim, a->shape, b->ndim, b->shape, b->count, i)];
+                adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+                adam_vm_push(vm, OBJ_VAL(result));
+            } else if (a->count > 0 && b->count % a->count == 0) {
+                ObjTensor* result = adam_new_tensor(vm, b->ndim, b->shape);
+                adam_vm_push(vm, OBJ_VAL(result));
+                for (int i = 0; i < b->count; i++)
+                    result->data[i] = a->data[broadcast_idx(b->ndim, b->shape, a->ndim, a->shape, a->count, i)] * b->data[i];
+                adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+                adam_vm_push(vm, OBJ_VAL(result));
+            } else {
                 runtime_error(vm, "Shape mismatch in tensor mul.");
                 return INTERPRET_RUNTIME_ERROR;
             }
-            ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+        } else if (IS_NUMBER(peek(vm, 0)) && IS_TENSOR(peek(vm, 1))) {
+            /* tensor * scalar */
+            double s = adam_as_number(peek(vm, 0));
+            ObjTensor* t = AS_TENSOR(peek(vm, 1));
+            ObjTensor* result = adam_new_tensor(vm, t->ndim, t->shape);
             adam_vm_push(vm, OBJ_VAL(result));
-            for (int i = 0; i < a->count; i++) {
-                result->data[i] = a->data[i] * b->data[i];
-            }
-            adam_vm_pop(vm);
-            adam_vm_pop(vm);
-            adam_vm_pop(vm);
+            for (int i = 0; i < t->count; i++) result->data[i] = t->data[i] * s;
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else if (IS_TENSOR(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {
+            /* scalar * tensor */
+            ObjTensor* t = AS_TENSOR(peek(vm, 0));
+            double s = adam_as_number(peek(vm, 1));
+            ObjTensor* result = adam_new_tensor(vm, t->ndim, t->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < t->count; i++) result->data[i] = s * t->data[i];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
             adam_vm_push(vm, OBJ_VAL(result));
         } else if (IS_INT(peek(vm, 0)) && IS_INT(peek(vm, 1))) {
             int32_t b = AS_INT(adam_vm_pop(vm));
@@ -401,7 +511,53 @@ static InterpretResult run(VM* vm) {
     }
 
     CASE(DIV): {
-        if (IS_INT(peek(vm, 0)) && IS_INT(peek(vm, 1))) {
+        if (IS_TENSOR(peek(vm, 0)) && IS_TENSOR(peek(vm, 1))) {
+            ObjTensor* b = AS_TENSOR(peek(vm, 0));
+            ObjTensor* a = AS_TENSOR(peek(vm, 1));
+            if (a->count == b->count) {
+                ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+                adam_vm_push(vm, OBJ_VAL(result));
+                for (int i = 0; i < a->count; i++)
+                    result->data[i] = a->data[i] / b->data[i];
+                adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+                adam_vm_push(vm, OBJ_VAL(result));
+            } else if (b->count > 0 && a->count % b->count == 0) {
+                ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+                adam_vm_push(vm, OBJ_VAL(result));
+                for (int i = 0; i < a->count; i++)
+                    result->data[i] = a->data[i] / b->data[broadcast_idx(a->ndim, a->shape, b->ndim, b->shape, b->count, i)];
+                adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+                adam_vm_push(vm, OBJ_VAL(result));
+            } else if (a->count > 0 && b->count % a->count == 0) {
+                ObjTensor* result = adam_new_tensor(vm, b->ndim, b->shape);
+                adam_vm_push(vm, OBJ_VAL(result));
+                for (int i = 0; i < b->count; i++)
+                    result->data[i] = a->data[broadcast_idx(b->ndim, b->shape, a->ndim, a->shape, a->count, i)] / b->data[i];
+                adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+                adam_vm_push(vm, OBJ_VAL(result));
+            } else {
+                runtime_error(vm, "Shape mismatch in tensor div.");
+                return INTERPRET_RUNTIME_ERROR;
+            }
+        } else if (IS_NUMBER(peek(vm, 0)) && IS_TENSOR(peek(vm, 1))) {
+            /* tensor / scalar */
+            double s = adam_as_number(peek(vm, 0));
+            ObjTensor* t = AS_TENSOR(peek(vm, 1));
+            ObjTensor* result = adam_new_tensor(vm, t->ndim, t->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < t->count; i++) result->data[i] = t->data[i] / s;
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else if (IS_TENSOR(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {
+            /* scalar / tensor */
+            ObjTensor* t = AS_TENSOR(peek(vm, 0));
+            double s = adam_as_number(peek(vm, 1));
+            ObjTensor* result = adam_new_tensor(vm, t->ndim, t->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < t->count; i++) result->data[i] = s / t->data[i];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else if (IS_INT(peek(vm, 0)) && IS_INT(peek(vm, 1))) {
             int32_t b = AS_INT(adam_vm_pop(vm));
             int32_t a = AS_INT(adam_vm_pop(vm));
             if (b == 0) {
@@ -864,19 +1020,31 @@ static InterpretResult run(VM* vm) {
         }
         ObjTensor* b = AS_TENSOR(peek(vm, 0));
         ObjTensor* a = AS_TENSOR(peek(vm, 1));
-        if (a->count != b->count) {
+        if (a->count == b->count) {
+            ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < a->count; i++)
+                result->data[i] = a->data[i] + b->data[i];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else if (b->count > 0 && a->count % b->count == 0) {
+            ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < a->count; i++)
+                result->data[i] = a->data[i] + b->data[broadcast_idx(a->ndim, a->shape, b->ndim, b->shape, b->count, i)];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else if (a->count > 0 && b->count % a->count == 0) {
+            ObjTensor* result = adam_new_tensor(vm, b->ndim, b->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < b->count; i++)
+                result->data[i] = a->data[broadcast_idx(b->ndim, b->shape, a->ndim, a->shape, a->count, i)] + b->data[i];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else {
             runtime_error(vm, "Shape mismatch in tensor add.");
             return INTERPRET_RUNTIME_ERROR;
         }
-        ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
-        adam_vm_push(vm, OBJ_VAL(result));
-        for (int i = 0; i < a->count; i++) {
-            result->data[i] = a->data[i] + b->data[i];
-        }
-        adam_vm_pop(vm);
-        adam_vm_pop(vm);
-        adam_vm_pop(vm);
-        adam_vm_push(vm, OBJ_VAL(result));
         DISPATCH();
     }
 
@@ -887,19 +1055,31 @@ static InterpretResult run(VM* vm) {
         }
         ObjTensor* b = AS_TENSOR(peek(vm, 0));
         ObjTensor* a = AS_TENSOR(peek(vm, 1));
-        if (a->count != b->count) {
+        if (a->count == b->count) {
+            ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < a->count; i++)
+                result->data[i] = a->data[i] - b->data[i];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else if (b->count > 0 && a->count % b->count == 0) {
+            ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < a->count; i++)
+                result->data[i] = a->data[i] - b->data[broadcast_idx(a->ndim, a->shape, b->ndim, b->shape, b->count, i)];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else if (a->count > 0 && b->count % a->count == 0) {
+            ObjTensor* result = adam_new_tensor(vm, b->ndim, b->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < b->count; i++)
+                result->data[i] = a->data[broadcast_idx(b->ndim, b->shape, a->ndim, a->shape, a->count, i)] - b->data[i];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else {
             runtime_error(vm, "Shape mismatch in tensor sub.");
             return INTERPRET_RUNTIME_ERROR;
         }
-        ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
-        adam_vm_push(vm, OBJ_VAL(result));
-        for (int i = 0; i < a->count; i++) {
-            result->data[i] = a->data[i] - b->data[i];
-        }
-        adam_vm_pop(vm);
-        adam_vm_pop(vm);
-        adam_vm_pop(vm);
-        adam_vm_push(vm, OBJ_VAL(result));
         DISPATCH();
     }
 
@@ -910,19 +1090,31 @@ static InterpretResult run(VM* vm) {
         }
         ObjTensor* b = AS_TENSOR(peek(vm, 0));
         ObjTensor* a = AS_TENSOR(peek(vm, 1));
-        if (a->count != b->count) {
+        if (a->count == b->count) {
+            ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < a->count; i++)
+                result->data[i] = a->data[i] * b->data[i];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else if (b->count > 0 && a->count % b->count == 0) {
+            ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < a->count; i++)
+                result->data[i] = a->data[i] * b->data[broadcast_idx(a->ndim, a->shape, b->ndim, b->shape, b->count, i)];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else if (a->count > 0 && b->count % a->count == 0) {
+            ObjTensor* result = adam_new_tensor(vm, b->ndim, b->shape);
+            adam_vm_push(vm, OBJ_VAL(result));
+            for (int i = 0; i < b->count; i++)
+                result->data[i] = a->data[broadcast_idx(b->ndim, b->shape, a->ndim, a->shape, a->count, i)] * b->data[i];
+            adam_vm_pop(vm); adam_vm_pop(vm); adam_vm_pop(vm);
+            adam_vm_push(vm, OBJ_VAL(result));
+        } else {
             runtime_error(vm, "Shape mismatch in tensor mul.");
             return INTERPRET_RUNTIME_ERROR;
         }
-        ObjTensor* result = adam_new_tensor(vm, a->ndim, a->shape);
-        adam_vm_push(vm, OBJ_VAL(result));
-        for (int i = 0; i < a->count; i++) {
-            result->data[i] = a->data[i] * b->data[i];
-        }
-        adam_vm_pop(vm);
-        adam_vm_pop(vm);
-        adam_vm_pop(vm);
-        adam_vm_push(vm, OBJ_VAL(result));
         DISPATCH();
     }
 

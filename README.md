@@ -130,6 +130,33 @@ let grads = grad_loss(input)
 
 No shipped language combines shape-dependent types, compiler-pass AD, and simplicity. Adam achieves this by restricting dimension variables to integers (not full dependent types) and limiting AD to a tractable set of tensor operations.
 
+### MNIST Handwritten Digit Recognition
+
+Adam's tensor system is powerful enough to train a real neural network. A 2-layer network (784->128->10) achieves **97.2% accuracy** on MNIST, trained entirely in Adam with manual backpropagation:
+
+```
+let w1 = tensor_randn([784, 128]) * 0.047
+let b1 = tensor_zeros([1, 128])
+
+// Forward pass
+let z1 = x @@ w1 + b1
+let h = tensor_relu(z1)
+let logits = h @@ w2 + b2
+let probs = tensor_exp(logits) / tensor_sum_axis(tensor_exp(logits), 1)
+
+// Backward pass (manual)
+let d_logits = (probs - targets) / 32.0
+let d_w2 = tensor_transpose(h) @@ d_logits
+w2 = w2 - lr * d_w2
+```
+
+See [MNIST Demo](docs/mnist.md) for full details. Run with:
+
+```bash
+just prepare-mnist   # download MNIST data
+just mnist           # train and evaluate (~2 minutes)
+```
+
 ### Expression-Oriented
 
 Everything returns a value. `if/else`, blocks, and functions all evaluate to their last expression.
@@ -183,6 +210,8 @@ just test
 | `just test-e2e` | Run pytest E2E integration tests |
 | `just fmt` | Format Rust code |
 | `just lint` | Lint Rust code |
+| `just prepare-mnist` | Download and prepare MNIST dataset |
+| `just mnist` | Train MNIST neural network (~2 min) |
 | `just clean` | Remove build artifacts |
 
 ## Project Structure
@@ -221,7 +250,8 @@ adam-lang/
 │       ├── runner.py        # CLI: compile + execute
 │       ├── repl.py          # Interactive REPL
 │       ├── test_runner.py   # Test framework
-│       └── benchmark.py     # Benchmark suite
+│       ├── benchmark.py     # Benchmark suite
+│       └── prepare_mnist.py # MNIST data pipeline
 ├── examples/                # Example Adam programs
 ├── benchmarks/              # Performance benchmarks
 ├── tests/                   # E2E integration tests
@@ -237,3 +267,4 @@ adam-lang/
 - [Compiler Pipeline](docs/compiler-pipeline.md) -- lexer, parser, type inference, codegen
 - [Tensor Types](docs/tensor-types.md) -- shape-dependent type system for tensors
 - [Autograd](docs/autograd.md) -- compile-time reverse-mode automatic differentiation
+- [MNIST Demo](docs/mnist.md) -- training a neural network from scratch in Adam

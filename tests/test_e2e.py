@@ -44,7 +44,12 @@ def load_inline_expectations(source: str) -> list[str] | None:
 
 # ── Parametrized tests from examples/ ────────────────────────────────
 
-EXAMPLE_FILES = sorted(EXAMPLES_DIR.glob("*.adam"))
+# Files that require external data or special setup (run separately)
+SKIP_FILES = {"mnist"}
+
+EXAMPLE_FILES = sorted(
+    f for f in EXAMPLES_DIR.glob("*.adam") if f.stem not in SKIP_FILES
+)
 
 
 @pytest.mark.parametrize(

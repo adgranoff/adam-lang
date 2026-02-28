@@ -206,8 +206,19 @@ ObjVariant* adam_new_variant(VM* vm, ObjString* tag, Value payload) {
 
 ObjTensor* adam_new_tensor(VM* vm, int ndim, int* shape) {
     ObjTensor* tensor = ALLOCATE_OBJ(vm, ObjTensor, OBJ_TENSOR);
-    tensor->ndim = ndim;
+    /* Initialize all fields before any allocation that could trigger GC.
+     * ALLOCATE_OBJ links us to vm->objects immediately, so if GC runs
+     * during a subsequent ALLOCATE, the sweep must see valid pointers. */
+    tensor->ndim = 0;
+    tensor->count = 0;
+    tensor->shape = NULL;
+    tensor->data = NULL;
+
+    /* Push onto stack so GC sees it as a root during sub-allocations. */
+    adam_vm_push(vm, OBJ_VAL(tensor));
+
     tensor->shape = ALLOCATE(vm, int, ndim);
+    tensor->ndim = ndim;
     int count = 1;
     for (int i = 0; i < ndim; i++) {
         tensor->shape[i] = shape[i];
@@ -215,9 +226,9 @@ ObjTensor* adam_new_tensor(VM* vm, int ndim, int* shape) {
     }
     tensor->count = count;
     tensor->data = ALLOCATE(vm, double, count);
-    for (int i = 0; i < count; i++) {
-        tensor->data[i] = 0.0;
-    }
+    memset(tensor->data, 0, sizeof(double) * count);
+
+    adam_vm_pop(vm);
     return tensor;
 }
 
