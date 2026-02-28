@@ -157,6 +157,31 @@ just prepare-mnist   # download MNIST data
 just mnist           # train and evaluate (~2 minutes)
 ```
 
+### Transformer Language Model
+
+Beyond classification, Adam can train a character-level **transformer** that generates new names after learning from 32K real names. Complete with self-attention, causal masking, and manual backpropagation through the full transformer architecture:
+
+```
+let scores = (q @@ tensor_permute(k, [0, 2, 1])) * scale + mask
+let attn = softmax(scores)
+let h = x_emb + (attn @@ v) @@ wo          // residual connection
+let h2 = h + tensor_relu(h @@ w1 + b1) @@ w2 + b2
+```
+
+After 3 epochs of training (~5 minutes), the model generates:
+```
+  genn
+  ibpan
+  symeeyi
+```
+
+See [Transformer Demo](docs/transformer.md) for full details. Run with:
+
+```bash
+just prepare-names   # download names dataset
+just transformer     # train and generate (~5 minutes)
+```
+
 ### Expression-Oriented
 
 Everything returns a value. `if/else`, blocks, and functions all evaluate to their last expression.
@@ -212,6 +237,8 @@ just test
 | `just lint` | Lint Rust code |
 | `just prepare-mnist` | Download and prepare MNIST dataset |
 | `just mnist` | Train MNIST neural network (~2 min) |
+| `just prepare-names` | Download and prepare names dataset |
+| `just transformer` | Train transformer language model (~5 min) |
 | `just clean` | Remove build artifacts |
 
 ## Project Structure
@@ -251,7 +278,8 @@ adam-lang/
 │       ├── repl.py          # Interactive REPL
 │       ├── test_runner.py   # Test framework
 │       ├── benchmark.py     # Benchmark suite
-│       └── prepare_mnist.py # MNIST data pipeline
+│       ├── prepare_mnist.py # MNIST data pipeline
+│       └── prepare_names.py # Names data pipeline (transformer)
 ├── examples/                # Example Adam programs
 ├── benchmarks/              # Performance benchmarks
 ├── tests/                   # E2E integration tests
@@ -268,3 +296,4 @@ adam-lang/
 - [Tensor Types](docs/tensor-types.md) -- shape-dependent type system for tensors
 - [Autograd](docs/autograd.md) -- compile-time reverse-mode automatic differentiation
 - [MNIST Demo](docs/mnist.md) -- training a neural network from scratch in Adam
+- [Transformer Demo](docs/transformer.md) -- character-level transformer language model

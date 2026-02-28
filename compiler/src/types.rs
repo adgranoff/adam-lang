@@ -873,6 +873,153 @@ impl TypeChecker {
             },
         );
 
+        // tensor_permute: (Tensor, [Int]) → Tensor
+        let tp1 = self.subst.fresh_var();
+        let tp2 = self.subst.fresh_var();
+        let tp1_id = match &tp1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tp2_id = match &tp2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_permute".into(),
+            Scheme {
+                vars: vec![tp1_id, tp2_id],
+                ty: Type::Fn {
+                    params: vec![tp1, Type::Array(Box::new(Type::Int))],
+                    ret: Box::new(tp2),
+                },
+            },
+        );
+        // tensor_sqrt: Tensor → Tensor
+        let tsq1 = self.subst.fresh_var();
+        let tsq2 = self.subst.fresh_var();
+        let tsq1_id = match &tsq1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tsq2_id = match &tsq2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_sqrt".into(),
+            Scheme {
+                vars: vec![tsq1_id, tsq2_id],
+                ty: Type::Fn { params: vec![tsq1], ret: Box::new(tsq2) },
+            },
+        );
+        // tensor_tanh: Tensor → Tensor
+        let tth1 = self.subst.fresh_var();
+        let tth2 = self.subst.fresh_var();
+        let tth1_id = match &tth1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tth2_id = match &tth2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_tanh".into(),
+            Scheme {
+                vars: vec![tth1_id, tth2_id],
+                ty: Type::Fn { params: vec![tth1], ret: Box::new(tth2) },
+            },
+        );
+        // tensor_max_axis: (Tensor, Int) → Tensor
+        let tma1 = self.subst.fresh_var();
+        let tma2 = self.subst.fresh_var();
+        let tma1_id = match &tma1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tma2_id = match &tma2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_max_axis".into(),
+            Scheme {
+                vars: vec![tma1_id, tma2_id],
+                ty: Type::Fn { params: vec![tma1, Type::Int], ret: Box::new(tma2) },
+            },
+        );
+        // tensor_embedding_lookup: (Tensor, Tensor) → Tensor
+        let tel1 = self.subst.fresh_var();
+        let tel2 = self.subst.fresh_var();
+        let tel3 = self.subst.fresh_var();
+        let tel1_id = match &tel1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tel2_id = match &tel2 { Type::Var(id) => *id, _ => unreachable!() };
+        let tel3_id = match &tel3 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_embedding_lookup".into(),
+            Scheme {
+                vars: vec![tel1_id, tel2_id, tel3_id],
+                ty: Type::Fn { params: vec![tel1, tel2], ret: Box::new(tel3) },
+            },
+        );
+        // tensor_causal_mask: Int → Tensor
+        let tcm = self.subst.fresh_var();
+        let tcm_id = match &tcm { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_causal_mask".into(),
+            Scheme {
+                vars: vec![tcm_id],
+                ty: Type::Fn { params: vec![Type::Int], ret: Box::new(tcm) },
+            },
+        );
+        // tensor_argmax: (Tensor, Int) → Tensor
+        let tam1 = self.subst.fresh_var();
+        let tam2 = self.subst.fresh_var();
+        let tam1_id = match &tam1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tam2_id = match &tam2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_argmax".into(),
+            Scheme {
+                vars: vec![tam1_id, tam2_id],
+                ty: Type::Fn { params: vec![tam1, Type::Int], ret: Box::new(tam2) },
+            },
+        );
+        // tensor_sample: (Tensor, Int) → Tensor
+        let tsm1 = self.subst.fresh_var();
+        let tsm2 = self.subst.fresh_var();
+        let tsm1_id = match &tsm1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tsm2_id = match &tsm2 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_sample".into(),
+            Scheme {
+                vars: vec![tsm1_id, tsm2_id],
+                ty: Type::Fn { params: vec![tsm1, Type::Int], ret: Box::new(tsm2) },
+            },
+        );
+        // tensor_scatter_add: (Tensor, Tensor, Tensor) → Tensor
+        let tsc1 = self.subst.fresh_var();
+        let tsc2 = self.subst.fresh_var();
+        let tsc3 = self.subst.fresh_var();
+        let tsc4 = self.subst.fresh_var();
+        let tsc1_id = match &tsc1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tsc2_id = match &tsc2 { Type::Var(id) => *id, _ => unreachable!() };
+        let tsc3_id = match &tsc3 { Type::Var(id) => *id, _ => unreachable!() };
+        let tsc4_id = match &tsc4 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_scatter_add".into(),
+            Scheme {
+                vars: vec![tsc1_id, tsc2_id, tsc3_id, tsc4_id],
+                ty: Type::Fn { params: vec![tsc1, tsc2, tsc3], ret: Box::new(tsc4) },
+            },
+        );
+        // tensor_set: (Tensor, Int, α) → Tensor
+        let tset1 = self.subst.fresh_var();
+        let tset2 = self.subst.fresh_var();
+        let tset3 = self.subst.fresh_var();
+        let tset1_id = match &tset1 { Type::Var(id) => *id, _ => unreachable!() };
+        let tset2_id = match &tset2 { Type::Var(id) => *id, _ => unreachable!() };
+        let tset3_id = match &tset3 { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_set".into(),
+            Scheme {
+                vars: vec![tset1_id, tset2_id, tset3_id],
+                ty: Type::Fn { params: vec![tset1, Type::Int, tset2], ret: Box::new(tset3) },
+            },
+        );
+        // tensor_get: (Tensor, Int) → Float
+        let tget = self.subst.fresh_var();
+        let tget_id = match &tget { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_get".into(),
+            Scheme {
+                vars: vec![tget_id],
+                ty: Type::Fn { params: vec![tget, Type::Int], ret: Box::new(Type::Float) },
+            },
+        );
+        // chr: Int → String
+        self.env.bind(
+            "chr".into(),
+            Scheme {
+                vars: vec![],
+                ty: Type::Fn { params: vec![Type::Int], ret: Box::new(Type::Str) },
+            },
+        );
         // tensor_exp: Tensor → Tensor
         let te1 = self.subst.fresh_var();
         let te2 = self.subst.fresh_var();

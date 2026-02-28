@@ -51,13 +51,44 @@
 static inline int broadcast_idx(int a_ndim, const int* a_shape,
                                 int b_ndim, const int* b_shape,
                                 int b_count, int i) {
-    if (a_ndim == 2 && b_ndim == 2) {
-        if (b_shape[0] == 1)
-            return i % a_shape[1];   /* row broadcast [M,N]+[1,N] */
-        if (b_shape[1] == 1)
-            return i / a_shape[1];   /* column broadcast [M,N]+[M,1] */
+    /* ============================================
+     * ORIGINAL 2D LOGIC — DO NOT MODIFY THIS BLOCK
+     * ============================================ */
+    if (a_ndim <= 2 && b_ndim <= 2) {
+        if (a_ndim == 2 && b_ndim == 2) {
+            if (b_shape[0] == 1)
+                return i % a_shape[1];   /* row broadcast [M,N]+[1,N] */
+            if (b_shape[1] == 1)
+                return i / a_shape[1];   /* column broadcast [M,N]+[M,1] */
+        }
+        return i % b_count;
     }
-    return i % b_count;
+
+    /* ============================================
+     * NEW N-DIMENSIONAL BROADCASTING (3D+)
+     * ============================================
+     * NumPy-style right-aligned broadcasting:
+     * Decompose flat index i (in a's layout) into coordinates,
+     * then map to b's coordinates (size-1 dims → coord 0). */
+
+    /* Decompose i into coordinates in a_shape */
+    int coords[16];
+    int tmp = i;
+    for (int d = a_ndim - 1; d >= 0; d--) {
+        coords[d] = tmp % a_shape[d];
+        tmp /= a_shape[d];
+    }
+
+    /* Map to b index with right-aligned broadcasting */
+    int b_idx = 0;
+    int b_stride = 1;
+    for (int d = b_ndim - 1; d >= 0; d--) {
+        int a_d = a_ndim - b_ndim + d;  /* right-aligned dimension in a */
+        int coord = (a_d >= 0 && b_shape[d] == 1) ? 0 : coords[a_d];
+        b_idx += coord * b_stride;
+        b_stride *= b_shape[d];
+    }
+    return b_idx;
 }
 
 /* ── VM lifecycle ──────────────────────────────────────────────────── */
@@ -984,6 +1015,10 @@ static InterpretResult run(VM* vm) {
         /* Compute batch dimensions (all dims except last two in a) */
         int batch = 1;
         for (int i = 0; i < a->ndim - 2; i++) batch *= a->shape[i];
+        /* When b has the same ndim as a, it is also batched (per-batch matmul).
+         * When b has fewer dims, it broadcasts across a's batch dims. */
+        int b_batched = (b->ndim == a->ndim);
+        int b_batch_stride = b_batched ? b_rows * b_cols : 0;
         /* Result shape: a's batch dims + [a_rows, b_cols] */
         int result_ndim = a->ndim;
         int result_shape_buf[16]; /* Max 16 dims */
@@ -995,12 +1030,13 @@ static InterpretResult run(VM* vm) {
         /* Naive batched matmul: for each batch, triple-loop */
         for (int bi = 0; bi < batch; bi++) {
             double* a_data = a->data + bi * a_rows * a_cols;
+            double* b_data = b->data + bi * b_batch_stride;
             double* r_data = result->data + bi * a_rows * b_cols;
             for (int i = 0; i < a_rows; i++) {
                 for (int j = 0; j < b_cols; j++) {
                     double sum = 0.0;
                     for (int k = 0; k < a_cols; k++) {
-                        sum += a_data[i * a_cols + k] * b->data[k * b_cols + j];
+                        sum += a_data[i * a_cols + k] * b_data[k * b_cols + j];
                     }
                     r_data[i * b_cols + j] = sum;
                 }

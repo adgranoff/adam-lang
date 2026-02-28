@@ -114,6 +114,18 @@ impl Compiler {
 
     fn add_constant(&mut self, constant: Constant) -> u8 {
         let f = self.current_mut();
+        // Deduplicate Int, Float, and String constants
+        for (i, existing) in f.constants.iter().enumerate() {
+            let is_match = match (&constant, existing) {
+                (Constant::Int(a), Constant::Int(b)) => a == b,
+                (Constant::Float(a), Constant::Float(b)) => a.to_bits() == b.to_bits(),
+                (Constant::String(a), Constant::String(b)) => a == b,
+                _ => false,
+            };
+            if is_match {
+                return i as u8;
+            }
+        }
         let idx = f.constants.len();
         assert!(idx <= u8::MAX as usize, "Too many constants in one function (max 256)");
         f.constants.push(constant);

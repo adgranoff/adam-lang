@@ -1,0 +1,276 @@
+// ============================================================================
+// Transformer Language Model — Character-level name generation
+// ============================================================================
+//
+// A single-layer, single-head transformer trained on 32K names.
+// After training, generates new plausible-sounding names.
+//
+// Architecture:
+//   Token embedding (28 → 64) + Positional embedding (19 → 64)
+//   → Causal self-attention (scaled dot-product, causal mask)
+//   → Residual → Feedforward (64 → 256 → 64, ReLU) → Residual
+//   → Output projection (64 → 28) → Cross-entropy loss
+//
+// All gradients computed manually.
+// ============================================================================
+
+// ─── Hyperparameters ─────────────────────────────────────────────────────────
+
+let vocab_size = 28
+let seq_len = 19
+let d_model = 64
+let d_ff = 256
+let lr = 0.01
+let batch_size = 64
+let n_epochs = 3
+let scale = 0.125
+let n_train = 28829
+let bt = batch_size * seq_len
+let inv_n = 1.0 / to_float(bt)
+
+// ─── Softmax helper ──────────────────────────────────────────────────────────
+
+fn softmax(x) {
+    let mx = tensor_max_axis(x, -1)
+    let e = tensor_exp(x - mx)
+    e / tensor_sum_axis(e, -1)
+}
+
+// ─── Forward pass (returns logits, probs, and intermediates for backward) ────
+
+fn forward(x_batch, tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask) {
+    let x_emb = tensor_embedding_lookup(tok_emb, x_batch) + pos_emb
+
+    // Attention
+    let q = x_emb @@ wq
+    let k = x_emb @@ wk
+    let v = x_emb @@ wv
+    let kt = tensor_permute(k, [0, 2, 1])
+    let scores = (q @@ kt) * scale + mask
+    let attn = softmax(scores)
+    let attn_out = (attn @@ v) @@ wo
+    let h = x_emb + attn_out
+
+    // Feedforward
+    let ff_pre = h @@ w1 + b1
+    let ff_act = tensor_relu(ff_pre)
+    let ff_out = ff_act @@ w2 + b2
+    let h2 = h + ff_out
+
+    // Output
+    let logits = h2 @@ w_out + b_out
+    let probs = softmax(logits)
+
+    // Return all intermediates needed for backward as an array
+    let result = [x_emb, q, k, v, attn, h, ff_pre, ff_act, h2, probs]
+    result
+}
+
+// ─── Backward pass (returns gradients for all parameters) ────────────────────
+
+fn backward(intermediates, y_oh, tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, x_batch) {
+    let x_emb = intermediates[0]
+    let q = intermediates[1]
+    let k = intermediates[2]
+    let v = intermediates[3]
+    let attn = intermediates[4]
+    let h = intermediates[5]
+    let ff_pre = intermediates[6]
+    let ff_act = intermediates[7]
+    let h2 = intermediates[8]
+    let probs = intermediates[9]
+
+    let d_logits = (probs - y_oh) * inv_n
+
+    // Output projection backward
+    let h2_t = tensor_permute(h2, [0, 2, 1])
+    let dw_out = tensor_reshape(tensor_sum_axis(h2_t @@ d_logits, 0), [d_model, vocab_size])
+    let db_out = tensor_sum_axis(tensor_sum_axis(d_logits, 0), 0)
+    let d_h2 = d_logits @@ tensor_transpose(w_out)
+
+    // FFN backward
+    let ff_act_t = tensor_permute(ff_act, [0, 2, 1])
+    let dw2 = tensor_reshape(tensor_sum_axis(ff_act_t @@ d_h2, 0), [d_ff, d_model])
+    let db2 = tensor_sum_axis(tensor_sum_axis(d_h2, 0), 0)
+    let d_ff_pre = tensor_relu_backward(ff_pre, d_h2 @@ tensor_transpose(w2))
+
+    let h_t = tensor_permute(h, [0, 2, 1])
+    let dw1 = tensor_reshape(tensor_sum_axis(h_t @@ d_ff_pre, 0), [d_model, d_ff])
+    let db1 = tensor_sum_axis(tensor_sum_axis(d_ff_pre, 0), 0)
+    let d_h = d_h2 + (d_ff_pre @@ tensor_transpose(w1))
+
+    // Attention backward
+    let d_attn_v = d_h @@ tensor_transpose(wo)
+    let attn_v = attn @@ v
+    let dwo = tensor_reshape(tensor_sum_axis(tensor_permute(attn_v, [0, 2, 1]) @@ d_h, 0), [d_model, d_model])
+    let d_attn = d_attn_v @@ tensor_permute(v, [0, 2, 1])
+    let d_v = tensor_permute(attn, [0, 2, 1]) @@ d_attn_v
+
+    // Softmax backward for attention
+    let sum_ad = tensor_sum_axis(attn * d_attn, -1)
+    let d_scores = attn * (d_attn - sum_ad) * scale
+
+    // Q/K backward
+    let d_q = d_scores @@ k
+    let d_k = tensor_permute(tensor_permute(q, [0, 2, 1]) @@ d_scores, [0, 2, 1])
+
+    // Projection backward
+    let x_emb_t = tensor_permute(x_emb, [0, 2, 1])
+    let dwq = tensor_reshape(tensor_sum_axis(x_emb_t @@ d_q, 0), [d_model, d_model])
+    let dwk = tensor_reshape(tensor_sum_axis(x_emb_t @@ d_k, 0), [d_model, d_model])
+    let dwv = tensor_reshape(tensor_sum_axis(x_emb_t @@ d_v, 0), [d_model, d_model])
+
+    let d_x_emb = d_h + (d_q @@ tensor_transpose(wq)) + (d_k @@ tensor_transpose(wk)) + (d_v @@ tensor_transpose(wv))
+
+    // Embedding backward
+    let dpos = tensor_reshape(tensor_sum_axis(d_x_emb, 0), [seq_len, d_model])
+    let x_flat = tensor_reshape(x_batch, [bt])
+    let d_flat = tensor_reshape(d_x_emb, [bt, d_model])
+    let dtok = tensor_scatter_add(tensor_zeros([vocab_size, d_model]), x_flat, d_flat)
+
+    // Return all gradients
+    let grads = [dtok, dpos, dwq, dwk, dwv, dwo, dw1, db1, dw2, db2, dw_out, db_out]
+    grads
+}
+
+// ─── Decode token to character ───────────────────────────────────────────────
+
+fn decode_token(tok) {
+    if tok >= 1 {
+        if tok <= 26 {
+            chr(tok + 96)
+        } else {
+            "'"
+        }
+    } else {
+        ""
+    }
+}
+
+// ─── Main ────────────────────────────────────────────────────────────────────
+
+println("Loading data...")
+let train_inputs = tensor_load("data/names_train_inputs.bin")
+let train_targets = tensor_load("data/names_train_targets.bin")
+
+print("Train: ")
+print(n_train)
+print(" | d_model: ")
+println(d_model)
+
+println("Initializing weights...")
+let tok_emb = tensor_randn([vocab_size, d_model]) * 0.1
+let pos_emb = tensor_randn([seq_len, d_model]) * 0.1
+let wq = tensor_randn([d_model, d_model]) * 0.125
+let wk = tensor_randn([d_model, d_model]) * 0.125
+let wv = tensor_randn([d_model, d_model]) * 0.125
+let wo = tensor_randn([d_model, d_model]) * 0.125
+let w1 = tensor_randn([d_model, d_ff]) * 0.125
+let b1 = tensor_zeros([1, 1, d_ff])
+let w2 = tensor_randn([d_ff, d_model]) * 0.0625
+let b2 = tensor_zeros([1, 1, d_model])
+let w_out = tensor_randn([d_model, vocab_size]) * 0.125
+let b_out = tensor_zeros([1, 1, vocab_size])
+let mask = tensor_causal_mask(seq_len)
+
+println("Training...")
+let t_start = clock()
+
+let epoch = 0
+while epoch < n_epochs {
+    let batch_start = 0
+    let epoch_loss = 0.0
+    let n_batches = 0
+
+    while batch_start + batch_size <= n_train {
+        let x_batch = tensor_slice(train_inputs, batch_start, batch_size)
+        let y_batch = tensor_slice(train_targets, batch_start, batch_size)
+
+        // Forward
+        let inter = forward(x_batch, tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask)
+        let probs = inter[9]
+
+        // Loss
+        let y_oh = tensor_reshape(tensor_one_hot(tensor_reshape(y_batch, [bt]), vocab_size), [batch_size, seq_len, vocab_size])
+        let loss = 0.0 - tensor_sum(y_oh * tensor_log(probs + 1e-10)) / to_float(bt)
+        epoch_loss = epoch_loss + loss
+        n_batches = n_batches + 1
+
+        // Backward
+        let grads = backward(inter, y_oh, tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, x_batch)
+
+        // SGD update
+        tok_emb = tok_emb - grads[0] * lr
+        pos_emb = pos_emb - grads[1] * lr
+        wq = wq - grads[2] * lr
+        wk = wk - grads[3] * lr
+        wv = wv - grads[4] * lr
+        wo = wo - grads[5] * lr
+        w1 = w1 - grads[6] * lr
+        b1 = b1 - grads[7] * lr
+        w2 = w2 - grads[8] * lr
+        b2 = b2 - grads[9] * lr
+        w_out = w_out - grads[10] * lr
+        b_out = b_out - grads[11] * lr
+
+        batch_start = batch_start + batch_size
+    }
+
+    print("Epoch ")
+    print(epoch)
+    print(" — Loss: ")
+    println(epoch_loss / to_float(n_batches))
+    epoch = epoch + 1
+}
+
+print("Time: ")
+print(clock() - t_start)
+println("s")
+
+// ─── Generation ──────────────────────────────────────────────────────────────
+
+fn generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask) {
+    let seq = tensor_zeros([1, seq_len])
+    let name = ""
+    let pos = 1
+    let done = false
+
+    while pos < seq_len - 1 {
+        if done == false {
+            let g_emb = tensor_embedding_lookup(tok_emb, seq) + pos_emb
+            let g_q = g_emb @@ wq
+            let g_k = g_emb @@ wk
+            let g_v = g_emb @@ wv
+            let g_kt = tensor_permute(g_k, [0, 2, 1])
+            let g_attn = softmax((g_q @@ g_kt) * scale + mask)
+            let g_h = g_emb + (g_attn @@ g_v) @@ wo
+            let g_h2 = g_h + tensor_relu(g_h @@ w1 + b1) @@ w2 + b2
+            let g_logits = g_h2 @@ w_out + b_out
+            let g_probs = softmax(g_logits)
+            let pred = tensor_sample(g_probs, -1)
+            let next_token = to_int(tensor_get(pred, pos - 1))
+
+            if next_token == 0 {
+                done = true
+                0
+            } else {
+                name = name + decode_token(next_token)
+                seq = tensor_set(seq, pos, next_token)
+                pos = pos + 1
+            }
+        } else {
+            pos = pos + 1
+        }
+    }
+    name
+}
+
+println("")
+println("Generated names:")
+let gi = 0
+while gi < 10 {
+    let name = generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask)
+    println("  " + name)
+    gi = gi + 1
+}
+println("Done!")

@@ -50,6 +50,22 @@ test-e2e: build
 test-adam: build
     cd stdlib && uv run adam-test
 
+# Run regression tests against baseline snapshots
+test-regression: build
+    cd stdlib && uv run --with pytest pytest "../tests/test_regression.py" -v
+
+# Run tensor operation unit tests
+test-tensors: build
+    #!/usr/bin/env bash
+    export PATH="$HOME/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
+    for f in tests/test_*.adam; do
+        name=$(basename "$f" .adam)
+        echo "Running $name..."
+        compiler/target/release/adamc compile "$f" -o ".tmp/${name}.adamb" 2>&1 && vm/build/adam-vm.exe ".tmp/${name}.adamb"
+        if [ $? -ne 0 ]; then echo "FAILED: $name"; exit 1; fi
+    done
+    echo "All tensor tests passed."
+
 # ─── Dev ─────────────────────────────────────────────────────────────────────
 
 # Run a .adam file end-to-end (compile + execute)
@@ -91,6 +107,18 @@ mnist: build
     #!/usr/bin/env bash
     export PATH="$HOME/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
     compiler/target/release/adamc compile examples/mnist.adam -o .tmp/mnist.adamb && vm/build/adam-vm.exe .tmp/mnist.adamb
+
+# ─── Transformer ────────────────────────────────────────────────────────────
+
+# Download and prepare names data for transformer
+prepare-names:
+    cd stdlib && uv run python -m adam_tools.prepare_names
+
+# Train transformer language model (run from project root so data/ paths resolve)
+transformer: build
+    #!/usr/bin/env bash
+    export PATH="$HOME/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
+    compiler/target/release/adamc compile examples/transformer.adam -o .tmp/transformer.adamb && vm/build/adam-vm.exe .tmp/transformer.adamb
 
 # Clean all build artifacts
 clean:
