@@ -135,7 +135,7 @@ The autograd system works well for simpler cases (see `examples/neural_net.adam`
 | File | Purpose |
 |------|---------|
 | `examples/mnist.adam` | Full MNIST training program |
-| `examples/mnist_smoke.adam` | Minimal forward pass test (used in E2E tests) |
+| `examples/mnist_smoke.adam` | Minimal forward pass test (requires MNIST data) |
 | `stdlib/src/adam_tools/prepare_mnist.py` | Downloads and converts MNIST data |
 | `vm/src/native.c` | Native tensor functions |
 | `vm/src/vm.c` | Tensor-scalar and 2D broadcasting |

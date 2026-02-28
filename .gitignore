@@ -18,7 +18,7 @@
 Thumbs.db
 .tmp/
 
-# Claude Code
+# Local tool config
 .claude/
 CLAUDE.md
 
