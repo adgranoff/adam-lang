@@ -52,7 +52,7 @@ while epoch < epochs {
         let h = tensor_relu(z1)
         let logits = h @@ w2 + b2
 
-        // Numerically stable softmax: subtract max per sample
+        // Numerically stable softmax: shift by global max to prevent overflow
         let max_l = tensor_max(logits)
         let shifted = logits - max_l
         let exps = tensor_exp(shifted)

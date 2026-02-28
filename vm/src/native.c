@@ -413,7 +413,7 @@ static Value tensor_load_native(VM* vm, int arg_count, Value* args) {
     }
     ObjTensor* tensor = adam_new_tensor(vm, ndim, shape);
     adam_vm_push(vm, OBJ_VAL(tensor)); /* GC protect */
-    if ((int)fread(tensor->data, sizeof(double), count, f) != count) {
+    if (fread(tensor->data, sizeof(double), count, f) != (size_t)count) {
         adam_vm_pop(vm);
         fclose(f);
         return NIL_VAL;

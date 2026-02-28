@@ -45,7 +45,7 @@ def load_inline_expectations(source: str) -> list[str] | None:
 # ── Parametrized tests from examples/ ────────────────────────────────
 
 # Files that require external data or special setup (run separately)
-SKIP_FILES = {"mnist"}
+SKIP_FILES = {"mnist", "mnist_smoke"}
 
 EXAMPLE_FILES = sorted(
     f for f in EXAMPLES_DIR.glob("*.adam") if f.stem not in SKIP_FILES
