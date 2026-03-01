@@ -142,5 +142,6 @@ The compiler and VM are separate executables. Python orchestrates them.
 
 ### Running Transformer
 1. Download data: `just prepare-names` (downloads names.txt, encodes as binary tensors)
-2. Train: `just transformer` (compiles `examples/transformer.adam` and runs it, ~5 minutes)
-3. Expected output: loss decreasing from ~1.28 to ~1.00, then 10 generated names
+2. Train: `just transformer` (trains 30 epochs, saves weights to `models/`, ~100 minutes)
+3. Generate: `just generate-names` (loads saved weights, generates names instantly)
+4. Expected: loss ~1.28 → ~0.875, names like "jaran", "kallai", "amare"

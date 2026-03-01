@@ -1130,6 +1130,20 @@ impl TypeChecker {
             },
         );
 
+        // tensor_save: (Tensor, String) → Nil
+        let tsv = self.subst.fresh_var();
+        let tsv_id = match &tsv { Type::Var(id) => *id, _ => unreachable!() };
+        self.env.bind(
+            "tensor_save".into(),
+            Scheme {
+                vars: vec![tsv_id],
+                ty: Type::Fn {
+                    params: vec![tsv, Type::Str],
+                    ret: Box::new(Type::Nil),
+                },
+            },
+        );
+
         // grad: (α → β) → (α → α)
         // Compiler intrinsic for reverse-mode AD. The autograd pass transforms
         // grad(f) calls after type checking, but the type checker needs to know

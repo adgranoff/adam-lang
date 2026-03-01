@@ -13,6 +13,9 @@
 # MNIST data (downloaded via `just prepare-mnist`)
 /data/
 
+# Trained model weights (generated via `just transformer`)
+/models/
+
 # OS
 .DS_Store
 Thumbs.db

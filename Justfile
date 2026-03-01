@@ -120,6 +120,12 @@ transformer: build
     export PATH="$HOME/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
     compiler/target/release/adamc compile examples/transformer.adam -o .tmp/transformer.adamb && vm/build/adam-vm.exe .tmp/transformer.adamb
 
+# Generate names from pretrained weights (instant, no training)
+generate-names: build
+    #!/usr/bin/env bash
+    export PATH="$HOME/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
+    compiler/target/release/adamc compile examples/generate_names.adam -o .tmp/generate_names.adamb && vm/build/adam-vm.exe .tmp/generate_names.adamb
+
 # Clean all build artifacts
 clean:
     rm -rf vm/build

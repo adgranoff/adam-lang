@@ -168,18 +168,18 @@ let h = x_emb + (attn @@ v) @@ wo          // residual connection
 let h2 = h + tensor_relu(h @@ w1 + b1) @@ w2 + b2
 ```
 
-After 3 epochs of training (~5 minutes), the model generates:
+After training on 32K names, the model generates plausible new ones:
 ```
-  genn
-  ibpan
-  symeeyi
+  jaran       kallai      amare
+  kokar       alehi       jekynin
 ```
 
 See [Transformer Demo](docs/transformer.md) for full details. Run with:
 
 ```bash
-just prepare-names   # download names dataset
-just transformer     # train and generate (~5 minutes)
+just prepare-names    # download names dataset
+just transformer      # train and save weights (~100 min)
+just generate-names   # generate names instantly from saved weights
 ```
 
 ### Expression-Oriented
@@ -238,7 +238,8 @@ just test
 | `just prepare-mnist` | Download and prepare MNIST dataset |
 | `just mnist` | Train MNIST neural network (~2 min) |
 | `just prepare-names` | Download and prepare names dataset |
-| `just transformer` | Train transformer language model (~5 min) |
+| `just transformer` | Train transformer and save weights (~100 min) |
+| `just generate-names` | Generate names from saved weights (instant) |
 | `just clean` | Remove build artifacts |
 
 ## Project Structure

@@ -22,7 +22,7 @@ let d_model = 64
 let d_ff = 256
 let lr = 0.01
 let batch_size = 64
-let n_epochs = 3
+let n_epochs = 30
 let scale = 0.125
 let n_train = 28829
 let bt = batch_size * seq_len
@@ -265,10 +265,29 @@ fn generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out,
     name
 }
 
+// ─── Save trained weights ────────────────────────────────────────────────────
+
+println("Saving weights...")
+tensor_save(tok_emb, "models/transformer_tok_emb.bin")
+tensor_save(pos_emb, "models/transformer_pos_emb.bin")
+tensor_save(wq, "models/transformer_wq.bin")
+tensor_save(wk, "models/transformer_wk.bin")
+tensor_save(wv, "models/transformer_wv.bin")
+tensor_save(wo, "models/transformer_wo.bin")
+tensor_save(w1, "models/transformer_w1.bin")
+tensor_save(b1, "models/transformer_b1.bin")
+tensor_save(w2, "models/transformer_w2.bin")
+tensor_save(b2, "models/transformer_b2.bin")
+tensor_save(w_out, "models/transformer_w_out.bin")
+tensor_save(b_out, "models/transformer_b_out.bin")
+println("Weights saved to models/")
+
+// ─── Generate sample names ──────────────────────────────────────────────────
+
 println("")
 println("Generated names:")
 let gi = 0
-while gi < 10 {
+while gi < 20 {
     let name = generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask)
     println("  " + name)
     gi = gi + 1

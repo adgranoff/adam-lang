@@ -5,38 +5,35 @@ Adam can train a character-level transformer language model from scratch. The `e
 ## Results
 
 ```
-Loading data...
-Train: 28829 | d_model: 64
-Initializing weights...
 Training...
-Epoch 0 — Loss: 1.28412
-Epoch 1 — Loss: 1.06402
-Epoch 2 — Loss: 1.00706
-Time: 328s
+Epoch 0  — Loss: 1.284
+Epoch 5  — Loss: 0.948
+Epoch 10 — Loss: 0.914
+Epoch 15 — Loss: 0.897
+Epoch 20 — Loss: 0.887
+Epoch 25 — Loss: 0.880
+Epoch 29 — Loss: 0.875
+Time: 6340s
 
 Generated names:
-  eic
-  genn
-  ndle
-  symeeyi
-  mabxo
-  ibpan
-  tsgamnnv
-  faaicno
-  ikcyrni
-  eaowya
+  jaran       kallai      amare
+  kokar       alehi       jekynin
+  hormar      lalishalia  kaqyan
 ```
 
-Training completes in ~5 minutes on a single CPU core using Adam's naive C virtual machine — no BLAS, no GPU, no external libraries.
+After 30 epochs (~100 minutes), the model generates plausible-sounding names. Training runs on a single CPU core using Adam's naive C virtual machine — no BLAS, no GPU, no external libraries. Weights are saved to `models/` so you can generate names instantly without retraining.
 
 ## Running It
 
 ```bash
-just prepare-names   # download names dataset (~1 second)
-just transformer     # compile and train (~5 minutes)
+just prepare-names    # download names dataset (~1 second)
+just transformer      # train and save weights (~100 minutes for 30 epochs)
+just generate-names   # generate names instantly from saved weights
 ```
 
 The `prepare-names` step downloads 32,033 names from a public dataset, encodes them as character sequences (vocabulary: `.` + `a-z` + `'` = 28 tokens, max sequence length 19), and saves them as binary tensor files in `data/`.
+
+After training, weights are saved to `models/`. The `generate-names` command loads these weights and generates names instantly — no retraining needed.
 
 ## Architecture
 
@@ -149,6 +146,7 @@ These tensor operations were added to `vm/src/native.c` for the transformer:
 | `tensor_get(t, idx)` | Get single element by flat index |
 | `tensor_sqrt(t)` | Element-wise square root |
 | `tensor_tanh(t)` | Element-wise hyperbolic tangent |
+| `tensor_save(t, path)` | Save tensor to binary file (inverse of tensor_load) |
 | `chr(code)` | Convert integer to single-character string |
 
 ## VM Enhancements
@@ -187,6 +185,7 @@ The transformer demo exercises the full N-dimensional tensor system (3D matmul, 
 | File | Purpose |
 |------|---------|
 | `examples/transformer.adam` | Full transformer training program |
+| `examples/generate_names.adam` | Instant name generation from saved weights |
 | `stdlib/src/adam_tools/prepare_names.py` | Downloads and converts names data |
 | `vm/src/native.c` | Native tensor functions (permute, embedding, mask, etc.) |
 | `vm/src/vm.c` | N-dim broadcasting and batched matmul |

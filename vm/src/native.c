@@ -891,6 +891,28 @@ static Value tensor_load_native(VM* vm, int arg_count, Value* args) {
     return OBJ_VAL(tensor);
 }
 
+static Value tensor_save_native(VM* vm, int arg_count, Value* args) {
+    /* tensor_save(tensor, path) → Nil
+     * Binary format: [ndim:i32][shape[0]:i32]...[shape[n]:i32][data:f64*] */
+    if (arg_count != 2 || !IS_TENSOR(args[0]) || !IS_STRING(args[1])) return NIL_VAL;
+    ObjTensor* t = AS_TENSOR(args[0]);
+    const char* path = AS_CSTRING(args[1]);
+    FILE* f = fopen(path, "wb");
+    if (!f) {
+        fprintf(stderr, "tensor_save: cannot open '%s' for writing\n", path);
+        return NIL_VAL;
+    }
+    int32_t ndim = t->ndim;
+    fwrite(&ndim, sizeof(int32_t), 1, f);
+    for (int i = 0; i < t->ndim; i++) {
+        int32_t dim = t->shape[i];
+        fwrite(&dim, sizeof(int32_t), 1, f);
+    }
+    fwrite(t->data, sizeof(double), t->count, f);
+    fclose(f);
+    return NIL_VAL;
+}
+
 /* ── Registration ──────────────────────────────────────────────────── */
 
 void adam_register_natives(VM* vm) {
@@ -938,4 +960,5 @@ void adam_register_natives(VM* vm) {
     define_native(vm, "tensor_slice",         tensor_slice_native);
     define_native(vm, "tensor_one_hot",       tensor_one_hot_native);
     define_native(vm, "tensor_load",          tensor_load_native);
+    define_native(vm, "tensor_save",          tensor_save_native);
 }
