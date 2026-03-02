@@ -9,6 +9,8 @@
  * from GC during allocation), then stores them in vm->globals.
  */
 
+#include <time.h>
+
 #include "adam/common.h"
 #include "adam/native.h"
 #include "adam/vm.h"
@@ -937,6 +939,7 @@ static Value gc_reset_stats_native(VM* vm, int arg_count, Value* args) {
 /* ── Registration ──────────────────────────────────────────────────── */
 
 void adam_register_natives(VM* vm) {
+    srand((unsigned int)time(NULL));
     define_native(vm, "clock",   clock_native);
     define_native(vm, "print",   print_native);
     define_native(vm, "println", println_native);
