@@ -125,6 +125,12 @@ static Value abs_native(VM* vm, int arg_count, Value* args) {
     return NIL_VAL;
 }
 
+static Value push_native(VM* vm, int arg_count, Value* args) {
+    if (arg_count != 2 || !IS_ARRAY(args[0])) return NIL_VAL;
+    adam_array_push(vm, AS_ARRAY(args[0]), args[1]);
+    return NIL_VAL;
+}
+
 /* ── Tensor native functions ───────────────────────────────────────── */
 
 /* Helper: extract an array of ints from an Adam array value for shapes */
@@ -951,6 +957,7 @@ void adam_register_natives(VM* vm) {
     define_native(vm, "to_float",to_float_native);
     define_native(vm, "sqrt",    sqrt_native);
     define_native(vm, "abs",     abs_native);
+    define_native(vm, "push",    push_native);
 
     /* Tensor natives */
     define_native(vm, "tensor_zeros",     tensor_zeros_native);

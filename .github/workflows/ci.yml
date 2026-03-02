@@ -55,6 +55,12 @@ jobs:
       - name: Run E2E tests
         run: cd stdlib && uv run --with pytest pytest "../tests/test_e2e.py" -v
 
+      - name: Run regression tests
+        run: cd stdlib && uv run --with pytest pytest "../tests/test_regression.py" -v
+
+      - name: Transformer smoke test (compile only)
+        run: compiler/target/release/adamc compile examples/transformer.adam -o /dev/null
+
       # ── TypeScript ────────────────────────────────────────
       - name: Build LSP server
         run: cd tools/lsp && npm ci && npx tsc

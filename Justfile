@@ -2,7 +2,7 @@
 # Usage: just <recipe>
 
 # Default PATH setup for Windows (MSYS2 MinGW + Cargo)
-export PATH := env("HOME") + "/.cargo/bin:/c/msys64/mingw64/bin:" + env("PATH")
+export PATH := env("HOME", env("USERPROFILE", "")) + "/.cargo/bin:/c/msys64/mingw64/bin:" + env("PATH")
 
 # Default recipe: build everything
 default: build
@@ -57,7 +57,7 @@ test-regression: build
 # Run tensor operation unit tests
 test-tensors: build
     #!/usr/bin/env bash
-    export PATH="$HOME/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
+    export PATH="${HOME:-$USERPROFILE}/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
     for f in tests/test_*.adam; do
         name=$(basename "$f" .adam)
         echo "Running $name..."
@@ -105,7 +105,7 @@ prepare-mnist:
 # Train MNIST neural network (run from project root so data/ paths resolve)
 mnist: build
     #!/usr/bin/env bash
-    export PATH="$HOME/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
+    export PATH="${HOME:-$USERPROFILE}/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
     compiler/target/release/adamc compile examples/mnist.adam -o .tmp/mnist.adamb && vm/build/adam-vm.exe .tmp/mnist.adamb
 
 # ─── Transformer ────────────────────────────────────────────────────────────
@@ -117,13 +117,13 @@ prepare-names:
 # Train transformer language model (run from project root so data/ paths resolve)
 transformer: build
     #!/usr/bin/env bash
-    export PATH="$HOME/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
+    export PATH="${HOME:-$USERPROFILE}/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
     compiler/target/release/adamc compile examples/transformer.adam -o .tmp/transformer.adamb && vm/build/adam-vm.exe .tmp/transformer.adamb
 
 # Generate names from pretrained weights (instant, no training)
 generate-names: build
     #!/usr/bin/env bash
-    export PATH="$HOME/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
+    export PATH="${HOME:-$USERPROFILE}/.cargo/bin:/c/msys64/mingw64/bin:$PATH"
     compiler/target/release/adamc compile examples/generate_names.adam -o .tmp/generate_names.adamb && vm/build/adam-vm.exe .tmp/generate_names.adamb
 
 # Clean all build artifacts

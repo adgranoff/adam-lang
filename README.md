@@ -132,7 +132,7 @@ No shipped language combines shape-dependent types, compiler-pass AD, and simpli
 
 ### MNIST Handwritten Digit Recognition
 
-Adam's tensor system is powerful enough to train a real neural network. A 2-layer network (784->128->10) achieves **97.2% accuracy** on MNIST, trained entirely in Adam with manual backpropagation:
+Adam's tensor system is powerful enough to train a real neural network. A 2-layer network (784->128->10) achieves **97.2% test accuracy** on MNIST in ~2 minutes of training, implemented entirely in Adam with manual backpropagation:
 
 ```
 let w1 = tensor_randn([784, 128]) * 0.047

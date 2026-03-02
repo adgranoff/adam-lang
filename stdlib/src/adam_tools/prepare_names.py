@@ -18,7 +18,10 @@ from __future__ import annotations
 
 import random
 import struct
+import urllib.request
 from pathlib import Path
+
+NAMES_URL = "https://raw.githubusercontent.com/karpathy/makemore/master/names.txt"
 
 
 VOCAB = "." + "abcdefghijklmnopqrstuvwxyz" + "'"
@@ -54,9 +57,14 @@ def main() -> None:
 
     names_file = data_dir / "names.txt"
     if not names_file.exists():
-        print(f"Error: {names_file} not found.")
-        print("Download it: curl -o data/names.txt https://raw.githubusercontent.com/karpathy/makemore/master/names.txt")
-        raise SystemExit(1)
+        print(f"Downloading names dataset from {NAMES_URL}...")
+        try:
+            urllib.request.urlretrieve(NAMES_URL, names_file)
+            print(f"  Saved to {names_file}")
+        except Exception as e:
+            print(f"Error: failed to download names dataset: {e}")
+            print(f"Download manually: curl -o data/names.txt {NAMES_URL}")
+            raise SystemExit(1)
 
     # Read and filter names
     names = []

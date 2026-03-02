@@ -118,7 +118,7 @@ def run_test(
         )
 
     # Check for snapshot file
-    snapshot_file = snapshot_dir / f"{name}.expected"
+    snapshot_file = snapshot_dir / f"{name}_baseline.txt"
     if snapshot_file.exists():
         expected_output = snapshot_file.read_text().rstrip("\n")
         passed = actual_output == expected_output

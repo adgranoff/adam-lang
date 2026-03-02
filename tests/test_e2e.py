@@ -26,7 +26,7 @@ SNAPSHOTS_DIR = ROOT / "tests" / "snapshots"
 
 def load_snapshot(name: str) -> str | None:
     """Load expected output from a snapshot file."""
-    snapshot = SNAPSHOTS_DIR / f"{name}.expected"
+    snapshot = SNAPSHOTS_DIR / f"{name}_baseline.txt"
     if snapshot.exists():
         return snapshot.read_text().rstrip("\n")
     return None
