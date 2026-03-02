@@ -1,3 +1,5 @@
+[![CI](https://github.com/adgranoff/adam-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/adgranoff/adam-lang/actions/workflows/ci.yml)
+
 # Adam
 
 A statically-typed, expression-oriented programming language with Hindley-Milner type inference, compiled to bytecode and executed on a custom virtual machine.
@@ -10,6 +12,12 @@ fn fibonacci(n) {
 
 println(fibonacci(20))
 ```
+
+## What This Is
+
+Adam is an educational compiler + VM system exploring how far you can push a from-scratch language implementation. It's not a production ML framework — it's a single-person project demonstrating that a custom language can type-check tensor shapes at compile time, generate gradient code via AST transformation, and train real neural networks on its own naive VM. Everything here — lexer, parser, type checker, autograd, bytecode compiler, garbage collector, and the training programs — is written from scratch with no ML library dependencies.
+
+CI validates: C VM build + tests, Rust compiler (88 unit tests), Python E2E tests (15), regression snapshots (11), transformer compilation, TypeScript type-checking.
 
 ## Architecture
 
@@ -128,7 +136,7 @@ let grad_loss = grad(loss)
 let grads = grad_loss(input)
 ```
 
-No shipped language combines shape-dependent types, compiler-pass AD, and simplicity. Adam achieves this by restricting dimension variables to integers (not full dependent types) and limiting AD to a tractable set of tensor operations.
+Few languages combine shape-dependent types and compiler-pass AD in a simple implementation. Adam achieves this by restricting dimension variables to integers (not full dependent types) and limiting AD to a tractable set of tensor operations.
 
 ### MNIST Handwritten Digit Recognition
 
@@ -159,7 +167,7 @@ just mnist           # train and evaluate (~2 minutes)
 
 ### Transformer Language Model
 
-Beyond classification, Adam can train a character-level **transformer** that generates new names after learning from 32K real names. Complete with self-attention, causal masking, and manual backpropagation through the full transformer architecture:
+Beyond classification, Adam can train a single-layer, single-head character-level **transformer** that generates new names after learning from 32K real names. Complete with self-attention, causal masking, and manual backpropagation through the full transformer architecture:
 
 ```
 let scores = (q @@ tensor_permute(k, [0, 2, 1])) * scale + mask
@@ -228,6 +236,25 @@ just repl
 just test
 ```
 
+### Reproduce the ML Results
+
+```bash
+# MNIST: train a neural network (~2 minutes)
+just prepare-mnist          # downloads MNIST via scikit-learn
+just mnist                  # trains to ~97% test accuracy
+# Expected output: loss decreasing from ~0.29 to ~0.065, final accuracy ~97%
+
+# Transformer: train a name generator (~85 minutes, or compile-only in ~1 second)
+just prepare-names          # downloads 32K names dataset
+just transformer            # trains 30 epochs, saves weights to models/
+just generate-names         # generates names from saved weights (instant)
+
+# Quick smoke test (no training data needed, ~1 second):
+just run examples/neural_net.adam    # forward pass + autograd demo
+```
+
+Timings are from a single-core desktop CPU. Results are deterministic for MNIST (fixed weight init), non-deterministic for transformer name generation (RNG-seeded sampling).
+
 ## Build Commands
 
 | Command | Description |
@@ -294,6 +321,14 @@ adam-lang/
 ├── docs/                    # Technical documentation
 └── Justfile                 # Build orchestration
 ```
+
+## Known Limitations
+
+- **CPU-only**: No SIMD, no GPU. Transformer training takes ~85 minutes where a GPU framework would take seconds.
+- **Autograd scope**: `grad()` handles `+`, `-`, `*`, `@@`, `sum`, `transpose`. No support for control flow, ReLU, exp, or log — the MNIST and transformer demos use manual backpropagation.
+- **Non-deterministic generation**: Transformer name generation uses RNG-seeded sampling, so outputs vary between runs. Training loss is reproducible.
+- **Single-file programs**: No module/import system. Programs are single `.adam` files.
+- **No string interpolation**: String formatting is limited to concatenation.
 
 ## Documentation
 

@@ -96,6 +96,8 @@ Only tensor operations are differentiated. The supported operations are:
 
 Scalar operations, control flow, and function calls to non-differentiable functions are treated as opaque (constant during differentiation).
 
+**Note**: Because autograd doesn't yet cover ReLU, exp, or log, the MNIST and transformer demos use manual backpropagation rather than `grad()`.
+
 ## Comparison
 
 | System | AD Method | Timing | Overhead |

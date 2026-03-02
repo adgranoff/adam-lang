@@ -207,6 +207,13 @@ The compiler now deduplicates Int, Float, and String constants in each function'
 
 The transformer demo exercises the full N-dimensional tensor system (3D matmul, broadcasting, permute, attention masking) that was built on top of the 2D foundations established by MNIST.
 
+## Limitations
+
+- Single-layer, single-head only — no multi-head attention or layer stacking
+- CPU-only: ~85 minutes training time (d_model=96 is the sweet spot; d_model=128+ causes cache thrashing)
+- Name generation is non-deterministic (RNG-seeded sampling)
+- No learning rate scheduling or Adam optimizer — plain SGD
+
 ## Files
 
 | File | Purpose |
