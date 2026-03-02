@@ -1,7 +1,10 @@
 # Adam Language — Cross-language build orchestration
 # Usage: just <recipe>
 
-# Default PATH setup for Windows (MSYS2 MinGW + Cargo)
+# Shell setup: use MSYS2 bash on Windows so recipes can use Unix syntax
+set windows-shell := ["C:/msys64/usr/bin/bash.exe", "-cu"]
+
+# Default PATH setup (MSYS2 MinGW + Cargo)
 export PATH := env("HOME", env("USERPROFILE", "")) + "/.cargo/bin:/c/msys64/mingw64/bin:" + env("PATH")
 
 # Default recipe: build everything

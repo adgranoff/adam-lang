@@ -3,7 +3,7 @@
 Compiles and executes .adam test files, comparing actual output against
 expected output stored in snapshot files. Supports three test modes:
 
-1. **Snapshot tests**: Compare output against .expected files
+1. **Snapshot tests**: Compare output against _baseline.txt files
 2. **Inline tests**: Parse expected output from `// expect: <value>` comments
 3. **Error tests**: Verify that specific type errors are reported
 
@@ -149,7 +149,7 @@ def update_snapshot(test_file: Path, snapshot_dir: Path, root: Path) -> str:
     if code != 0:
         return f"SKIP (compile/run error): {stderr.strip()}"
 
-    snapshot_file = snapshot_dir / f"{test_file.stem}.expected"
+    snapshot_file = snapshot_dir / f"{test_file.stem}_baseline.txt"
     snapshot_file.write_text(stdout.rstrip("\n") + "\n")
     return f"Updated {snapshot_file}"
 
