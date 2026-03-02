@@ -6,10 +6,10 @@
 // After training, generates new plausible-sounding names.
 //
 // Architecture:
-//   Token embedding (28 → 64) + Positional embedding (19 → 64)
+//   Token embedding (28 → 96) + Positional embedding (19 → 96)
 //   → Causal self-attention (scaled dot-product, causal mask)
-//   → Residual → Feedforward (64 → 256 → 64, ReLU) → Residual
-//   → Output projection (64 → 28) → Cross-entropy loss
+//   → Residual → Feedforward (96 → 384 → 96, ReLU) → Residual
+//   → Output projection (96 → 28) → Cross-entropy loss
 //
 // All gradients computed manually.
 // ============================================================================
@@ -18,12 +18,12 @@
 
 let vocab_size = 28
 let seq_len = 19
-let d_model = 64
-let d_ff = 256
+let d_model = 96
+let d_ff = 384
 let lr = 0.01
 let batch_size = 64
 let n_epochs = 30
-let scale = 0.125
+let scale = 0.1021
 let n_train = 28829
 let bt = batch_size * seq_len
 let inv_n = 1.0 / to_float(bt)

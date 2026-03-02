@@ -75,6 +75,11 @@ typedef struct VM {
     Obj** gray_stack;       /* Worklist of gray objects to process */
     size_t bytes_allocated; /* Total bytes currently allocated */
     size_t next_gc;         /* Threshold for next GC trigger */
+
+    /* GC profiling */
+    uint64_t gc_count;       /* Number of GC collections */
+    double   gc_time_ms;     /* Total time spent in GC (ms) */
+    size_t   gc_objects_freed; /* Total objects freed */
 } VM;
 
 /* ── Interpret result ──────────────────────────────────────────────── */

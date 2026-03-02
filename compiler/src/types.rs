@@ -759,6 +759,24 @@ impl TypeChecker {
             },
         );
 
+        // gc_stats: () → Nil
+        self.env.bind(
+            "gc_stats".into(),
+            Scheme::mono(Type::Fn {
+                params: vec![],
+                ret: Box::new(Type::Nil),
+            }),
+        );
+
+        // gc_reset_stats: () → Nil
+        self.env.bind(
+            "gc_reset_stats".into(),
+            Scheme::mono(Type::Fn {
+                params: vec![],
+                ret: Box::new(Type::Nil),
+            }),
+        );
+
         // Tensor builtins — use polymorphic types with fresh vars.
         // tensor_zeros: [Int] → Tensor (shape determined at runtime)
         let tz = self.subst.fresh_var();

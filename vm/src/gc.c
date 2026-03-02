@@ -32,6 +32,8 @@
  *   the more live data, the less frequent collections.
  */
 
+#include <time.h>
+
 #include "adam/common.h"
 #include "adam/gc.h"
 #include "adam/vm.h"
@@ -227,6 +229,7 @@ static void sweep(VM* vm) {
 /* ── Full GC cycle ─────────────────────────────────────────────────── */
 
 void adam_gc_collect(VM* vm) {
+    clock_t gc_start = clock();
 #ifdef DEBUG_LOG_GC
     printf("-- gc begin\n");
     size_t before = vm->bytes_allocated;
@@ -238,6 +241,8 @@ void adam_gc_collect(VM* vm) {
     sweep(vm);
 
     vm->next_gc = vm->bytes_allocated * ADAM_GC_HEAP_GROW_FACTOR;
+    vm->gc_count++;
+    vm->gc_time_ms += (double)(clock() - gc_start) / CLOCKS_PER_SEC * 1000.0;
 
 #ifdef DEBUG_LOG_GC
     printf("-- gc end\n");

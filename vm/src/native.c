@@ -47,6 +47,7 @@ static Value println_native(VM* vm, int arg_count, Value* args) {
         adam_print_value(args[i]);
     }
     printf("\n");
+    fflush(stdout);
     return NIL_VAL;
 }
 
@@ -913,12 +914,34 @@ static Value tensor_save_native(VM* vm, int arg_count, Value* args) {
     return NIL_VAL;
 }
 
+/* ── GC profiling ─────────────────────────────────────────────────── */
+
+static Value gc_stats_native(VM* vm, int arg_count, Value* args) {
+    (void)arg_count; (void)args;
+    printf("[gc] collections=%llu  time=%.1fms  allocated=%.1fMB  next_gc=%.1fMB\n",
+           (unsigned long long)vm->gc_count,
+           vm->gc_time_ms,
+           (double)vm->bytes_allocated / (1024.0 * 1024.0),
+           (double)vm->next_gc / (1024.0 * 1024.0));
+    fflush(stdout);
+    return NIL_VAL;
+}
+
+static Value gc_reset_stats_native(VM* vm, int arg_count, Value* args) {
+    (void)arg_count; (void)args;
+    vm->gc_count = 0;
+    vm->gc_time_ms = 0.0;
+    return NIL_VAL;
+}
+
 /* ── Registration ──────────────────────────────────────────────────── */
 
 void adam_register_natives(VM* vm) {
     define_native(vm, "clock",   clock_native);
     define_native(vm, "print",   print_native);
     define_native(vm, "println", println_native);
+    define_native(vm, "gc_stats", gc_stats_native);
+    define_native(vm, "gc_reset_stats", gc_reset_stats_native);
     define_native(vm, "len",     len_native);
     define_native(vm, "type_of", type_of_native);
     define_native(vm, "to_int",  to_int_native);
