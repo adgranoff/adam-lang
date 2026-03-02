@@ -170,15 +170,15 @@ let h2 = h + tensor_relu(h @@ w1 + b1) @@ w2 + b2
 
 After training on 32K names, the model generates plausible new ones:
 ```
-  jaran       kallai      amare
-  kokar       alehi       jekynin
+  vergis      genta       sharin
+  jeynna      belvy       yaslon
 ```
 
 See [Transformer Demo](docs/transformer.md) for full details. Run with:
 
 ```bash
 just prepare-names    # download names dataset
-just transformer      # train and save weights (~100 min)
+just transformer      # train and save weights (~85 min)
 just generate-names   # generate names instantly from saved weights
 ```
 
@@ -238,7 +238,7 @@ just test
 | `just prepare-mnist` | Download and prepare MNIST dataset |
 | `just mnist` | Train MNIST neural network (~2 min) |
 | `just prepare-names` | Download and prepare names dataset |
-| `just transformer` | Train transformer and save weights (~100 min) |
+| `just transformer` | Train transformer and save weights (~85 min) |
 | `just generate-names` | Generate names from saved weights (instant) |
 | `just clean` | Remove build artifacts |
 

@@ -33,7 +33,7 @@ just mnist                     # Train and evaluate (~2 min)
 
 # Transformer training
 just prepare-names             # Download names dataset
-just transformer               # Train and generate (~5 min)
+just transformer               # Train and generate (~85 min)
 
 # Run specific test suites
 cd compiler && cargo test          # Rust unit tests (88 tests)
@@ -142,6 +142,6 @@ The compiler and VM are separate executables. Python orchestrates them.
 
 ### Running Transformer
 1. Download data: `just prepare-names` (downloads names.txt, encodes as binary tensors)
-2. Train: `just transformer` (trains 30 epochs, saves weights to `models/`, ~100 minutes)
+2. Train: `just transformer` (trains 30 epochs, saves weights to `models/`, ~85 minutes)
 3. Generate: `just generate-names` (loads saved weights, generates names instantly)
-4. Expected: loss ~1.28 → ~0.875, names like "jaran", "kallai", "amare"
+4. Expected: loss ~1.18 → ~0.857, names like "vergis", "genta", "sharin"

@@ -6,28 +6,28 @@ Adam can train a character-level transformer language model from scratch. The `e
 
 ```
 Training...
-Epoch 0  — Loss: 1.284
-Epoch 5  — Loss: 0.948
-Epoch 10 — Loss: 0.914
-Epoch 15 — Loss: 0.897
-Epoch 20 — Loss: 0.887
-Epoch 25 — Loss: 0.880
-Epoch 29 — Loss: 0.875
-Time: 6340s
+Epoch 0  — Loss: 1.183
+Epoch 5  — Loss: 0.916
+Epoch 10 — Loss: 0.888
+Epoch 15 — Loss: 0.875
+Epoch 20 — Loss: 0.867
+Epoch 25 — Loss: 0.861
+Epoch 29 — Loss: 0.857
+Time: 5091s
 
 Generated names:
-  jaran       kallai      amare
-  kokar       alehi       jekynin
-  hormar      lalishalia  kaqyan
+  vergis      genta       sharin
+  jeynna      belvy       yaslon
+  ermico      ralie       kedsa
 ```
 
-After 30 epochs (~100 minutes), the model generates plausible-sounding names. Training runs on a single CPU core using Adam's naive C virtual machine — no BLAS, no GPU, no external libraries. Weights are saved to `models/` so you can generate names instantly without retraining.
+After 30 epochs (~85 minutes), the model generates plausible-sounding names. Training runs on a single CPU core using Adam's naive C virtual machine — no BLAS, no GPU, no external libraries. Weights are saved to `models/` so you can generate names instantly without retraining.
 
 ## Running It
 
 ```bash
 just prepare-names    # download names dataset (~1 second)
-just transformer      # train and save weights (~100 minutes for 30 epochs)
+just transformer      # train and save weights (~85 minutes for 30 epochs)
 just generate-names   # generate names instantly from saved weights
 ```
 
@@ -39,13 +39,13 @@ After training, weights are saved to `models/`. The `generate-names` command loa
 
 | Component | Shape | Description |
 |-----------|-------|-------------|
-| Token embedding | [28, 64] | Character → vector |
-| Positional embedding | [19, 64] | Position → vector |
-| Q/K/V projections | [64, 64] each | Self-attention projections |
-| Output projection | [64, 64] | Attention output |
-| FFN layer 1 | [64, 256] | Feedforward expansion |
-| FFN layer 2 | [256, 64] | Feedforward compression |
-| Output head | [64, 28] | Vector → character logits |
+| Token embedding | [28, 96] | Character → vector |
+| Positional embedding | [19, 96] | Position → vector |
+| Q/K/V projections | [96, 96] each | Self-attention projections |
+| Output projection | [96, 96] | Attention output |
+| FFN layer 1 | [96, 384] | Feedforward expansion |
+| FFN layer 2 | [384, 96] | Feedforward compression |
+| Output head | [96, 28] | Vector → character logits |
 
 - **Attention**: Single-head scaled dot-product with causal mask
 - **Activation**: ReLU in feedforward block
@@ -175,8 +175,8 @@ The compiler now deduplicates Int, Float, and String constants in each function'
 | Task | Image classification | Name generation |
 | Tensor rank | 2D (matrices) | 3D (batched sequences) |
 | New ops needed | 9 | 12 additional |
-| Parameters | ~100K | ~130K |
-| Training time | ~2 min | ~5 min |
+| Parameters | ~100K | ~120K |
+| Training time | ~2 min | ~85 min |
 
 The transformer demo exercises the full N-dimensional tensor system (3D matmul, broadcasting, permute, attention masking) that was built on top of the 2D foundations established by MNIST.
 
