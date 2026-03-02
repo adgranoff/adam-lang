@@ -4,6 +4,7 @@ Adam can train a character-level transformer language model from scratch. The `e
 
 ## Results
 
+### Training
 ```
 Training...
 Epoch 0  — Loss: 1.183
@@ -14,14 +15,29 @@ Epoch 20 — Loss: 0.867
 Epoch 25 — Loss: 0.861
 Epoch 29 — Loss: 0.857
 Time: 5091s
-
-Generated names:
-  vergis      genta       sharin
-  jeynna      belvy       yaslon
-  ermico      ralie       kedsa
 ```
 
-After 30 epochs (~85 minutes), the model generates plausible-sounding names. Training runs on a single CPU core using Adam's naive C virtual machine — no BLAS, no GPU, no external libraries. Weights are saved to `models/` so you can generate names instantly without retraining.
+After 30 epochs (~85 minutes), the model learns to generate plausible names. Training runs on a single CPU core using Adam's naive C virtual machine — no BLAS, no GPU, no external libraries. Weights are saved to `models/` so you can generate names instantly without retraining.
+
+### Generation
+```
+=== Random Names (temperature=1.0) ===
+  vergis
+  genta
+  sharin
+
+=== Temperature Comparison ===
+  Letter  temp=0.5 (conservative)   temp=1.0 (normal)       temp=1.5 (creative)
+  s       sarah                     sharin                   srequa
+  m       maria                     melvon                   mzoigh
+
+=== Names by Starting Letter ===
+  j: jeynna, jovan, jareth
+  k: kedsa, kalvin, krenna
+  z: zara, zelton, zivra
+```
+
+Temperature controls sampling randomness — low temperatures produce common names while high temperatures produce unusual ones. Starting-letter conditioning seeds the first character so all generated names begin with that letter.
 
 ## Running It
 
@@ -113,21 +129,32 @@ let dtok = tensor_scatter_add(tensor_zeros([vocab_size, d_model]), x_flat, d_fla
 
 ### Text Generation
 
-After training, the model generates new names by sampling from the learned distribution:
+After training, the model generates new names by sampling from the learned distribution. Generation supports **temperature control** and **starting-letter conditioning**:
 
 ```adam
-fn generate_name(...) {
+fn generate_name(..., temp, start_token) {
     let seq = tensor_zeros([1, seq_len])
+
+    // Optionally seed with a starting letter
+    if start_token > 0 {
+        seq = tensor_set(seq, 1, start_token)
+    }
+
+    let inv_temp = 1.0 / temp
     while pos < seq_len - 1 {
-        // Run transformer forward on current sequence
-        let g_probs = softmax(g_h2 @@ w_out + b_out)
-        // Sample next character from probability distribution
+        let g_logits = g_h2 @@ w_out + b_out
+        // Temperature scaling: lower = conservative, higher = creative
+        let g_probs = softmax(g_logits * inv_temp)
         let pred = tensor_sample(g_probs, -1)
-        let next_token = to_int(tensor_get(pred, pos - 1))
         ...
     }
 }
 ```
+
+- **Temperature < 1.0**: Sharpens the probability distribution, producing more common/predictable names
+- **Temperature = 1.0**: Normal sampling from the learned distribution
+- **Temperature > 1.0**: Flattens the distribution, producing more unusual/creative names
+- **Starting letter**: Seeds the sequence with a specific first character, so all generated names begin with that letter
 
 ## Native Functions Added
 
@@ -185,7 +212,7 @@ The transformer demo exercises the full N-dimensional tensor system (3D matmul, 
 | File | Purpose |
 |------|---------|
 | `examples/transformer.adam` | Full transformer training program |
-| `examples/generate_names.adam` | Instant name generation from saved weights |
+| `examples/generate_names.adam` | Name generation with temperature control and starting-letter conditioning |
 | `stdlib/src/adam_tools/prepare_names.py` | Downloads and converts names data |
 | `vm/src/native.c` | Native tensor functions (permute, embedding, mask, etc.) |
 | `vm/src/vm.c` | N-dim broadcasting and batched matmul |

@@ -12,9 +12,9 @@
 
 let vocab_size = 28
 let seq_len = 19
-let d_model = 64
-let d_ff = 256
-let scale = 0.125
+let d_model = 96
+let d_ff = 384
+let scale = 0.1021
 
 // ─── Softmax helper ────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ fn softmax(x) {
     e / tensor_sum_axis(e, -1)
 }
 
-// ─── Decode token to character ─────────────────────────────────────────────
+// ─── Character encoding/decoding ─────────────────────────────────────────
 
 fn decode_token(tok) {
     if tok >= 1 {
@@ -37,6 +37,8 @@ fn decode_token(tok) {
         ""
     }
 }
+
+// Token values: a=1, b=2, ..., z=26 (matching prepare_names.py encoding)
 
 // ─── Load pretrained weights ───────────────────────────────────────────────
 
@@ -58,11 +60,22 @@ println("Loaded.")
 
 // ─── Generation ────────────────────────────────────────────────────────────
 
-fn generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask) {
+fn generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask, temp, start_token) {
     let seq = tensor_zeros([1, seq_len])
     let name = ""
     let pos = 1
     let done = false
+
+    // If start_token > 0, seed the sequence with that letter
+    if start_token > 0 {
+        seq = tensor_set(seq, 1, start_token)
+        name = decode_token(start_token)
+        pos = 2
+    } else {
+        0
+    }
+
+    let inv_temp = if temp > 0.0 { 1.0 / temp } else { 1.0 }
 
     while pos < seq_len - 1 {
         if done == false {
@@ -75,7 +88,7 @@ fn generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out,
             let g_h = g_emb + (g_attn @@ g_v) @@ wo
             let g_h2 = g_h + tensor_relu(g_h @@ w1 + b1) @@ w2 + b2
             let g_logits = g_h2 @@ w_out + b_out
-            let g_probs = softmax(g_logits)
+            let g_probs = softmax(g_logits * inv_temp)
             let pred = tensor_sample(g_probs, -1)
             let next_token = to_int(tensor_get(pred, pos - 1))
 
@@ -94,12 +107,54 @@ fn generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out,
     name
 }
 
+// ─── Section 1: Random names (temp=1.0, no conditioning) ─────────────────
+
 println("")
-println("Generated names:")
+println("=== Random Names (temperature=1.0) ===")
 let gi = 0
-while gi < 20 {
-    let name = generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask)
+while gi < 10 {
+    let name = generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask, 1.0, 0)
     println("  " + name)
     gi = gi + 1
 }
+
+// ─── Section 2: Temperature comparison ───────────────────────────────────
+// Token values: a=1, k=11, m=13, r=18, s=19
+
+println("")
+println("=== Temperature Comparison ===")
+println("  Letter  temp=0.5 (conservative)   temp=1.0 (normal)       temp=1.5 (creative)")
+
+let temp_tokens = [19, 13, 11, 1, 18]
+let temp_labels = ["s", "m", "k", "a", "r"]
+let li = 0
+while li < 5 {
+    let tok = temp_tokens[li]
+    let ch = temp_labels[li]
+    let n_low  = generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask, 0.5, tok)
+    let n_mid  = generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask, 1.0, tok)
+    let n_high = generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask, 1.5, tok)
+    println("  " + ch + "       " + n_low + "                        " + n_mid + "                        " + n_high)
+    li = li + 1
+}
+
+// ─── Section 3: Names by letter ──────────────────────────────────────────
+// Token values: j=10, k=11, z=26, a=1, m=13
+
+println("")
+println("=== Names by Starting Letter ===")
+let letter_tokens = [10, 11, 26, 1, 13]
+let letter_labels = ["j", "k", "z", "a", "m"]
+let li2 = 0
+while li2 < 5 {
+    let tok2 = letter_tokens[li2]
+    let ch2 = letter_labels[li2]
+    let n1 = generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask, 1.0, tok2)
+    let n2 = generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask, 1.0, tok2)
+    let n3 = generate_name(tok_emb, pos_emb, wq, wk, wv, wo, w1, b1, w2, b2, w_out, b_out, mask, 1.0, tok2)
+    println("  " + ch2 + ": " + n1 + ", " + n2 + ", " + n3)
+    li2 = li2 + 1
+}
+
+println("")
 println("Done!")

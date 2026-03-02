@@ -168,10 +168,17 @@ let h = x_emb + (attn @@ v) @@ wo          // residual connection
 let h2 = h + tensor_relu(h @@ w1 + b1) @@ w2 + b2
 ```
 
-After training on 32K names, the model generates plausible new ones:
+After training on 32K names, the model generates plausible new ones — with **temperature control** (conservative to creative) and **starting-letter conditioning**:
 ```
+=== Random Names (temperature=1.0) ===
   vergis      genta       sharin
-  jeynna      belvy       yaslon
+
+=== Temperature Comparison ===
+  s       sarah (temp=0.5)    sharin (temp=1.0)    srequa (temp=1.5)
+
+=== Names by Starting Letter ===
+  j: jeynna, jovan, jareth
+  z: zara, zelton, zivra
 ```
 
 See [Transformer Demo](docs/transformer.md) for full details. Run with:
@@ -179,7 +186,7 @@ See [Transformer Demo](docs/transformer.md) for full details. Run with:
 ```bash
 just prepare-names    # download names dataset
 just transformer      # train and save weights (~85 min)
-just generate-names   # generate names instantly from saved weights
+just generate-names   # generate names with temperature + letter control
 ```
 
 ### Expression-Oriented
