@@ -1,0 +1,56 @@
+// MNIST smoke test — verify data loading and one forward pass
+
+let train_images = tensor_load("data/mnist_train_images.bin")
+let train_labels = tensor_load("data/mnist_train_labels.bin")
+
+println("Train images loaded:")
+println(tensor_shape(train_images))
+println(tensor_shape(train_labels))
+
+// Extract a tiny batch
+let x = tensor_slice(train_images, 0, 4)
+let y = tensor_slice(train_labels, 0, 4)
+println("Batch shape:")
+println(tensor_shape(x))
+println(tensor_shape(y))
+
+// Small weights for testing
+let w1 = tensor_randn([784, 16]) * 0.05
+let b1 = tensor_zeros([1, 16])
+let w2 = tensor_randn([16, 10]) * 0.15
+let b2 = tensor_zeros([1, 10])
+
+println("Forward pass...")
+let z1 = x @@ w1 + b1
+println("z1 shape:")
+println(tensor_shape(z1))
+
+let h = tensor_relu(z1)
+let logits = h @@ w2 + b2
+println("logits shape:")
+println(tensor_shape(logits))
+
+let targets = tensor_one_hot(y, 10)
+println("targets shape:")
+println(tensor_shape(targets))
+
+let max_l = tensor_max(logits)
+println("max logit:")
+println(max_l)
+
+let shifted = logits - max_l
+let exps = tensor_exp(shifted)
+let sum_exps = tensor_sum_axis(exps, 1)
+println("sum_exps shape:")
+println(tensor_shape(sum_exps))
+
+let probs = exps / sum_exps
+println("probs sum (should be close to 4):")
+println(tensor_sum(probs))
+
+let log_probs = tensor_log(probs + 1e-8)
+let loss = 0.0 - tensor_sum(targets * log_probs) / 4.0
+println("loss:")
+println(loss)
+
+println("Smoke test complete!")

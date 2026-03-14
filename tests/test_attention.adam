@@ -1,0 +1,91 @@
+// Test scaled dot-product attention mechanism
+// Verifies all tensor ops work together for transformer attention
+// expect: Q shape:
+// expect: [1, 4, 8]
+// expect: K^T shape:
+// expect: [1, 8, 4]
+// expect: Scores shape:
+// expect: [1, 4, 4]
+// expect: Max scores shape:
+// expect: [1, 4, 1]
+// expect: Sum exp shape:
+// expect: [1, 4, 1]
+// expect: Attn weights shape:
+// expect: [1, 4, 4]
+// expect: Row sums (should be ~1.0):
+// expect: Tensor<[1, 4, 1]>(1, 1, 1, 1)
+// expect: Output shape:
+// expect: [1, 4, 8]
+// expect: Causal mask applied:
+// expect: [1, 4, 4]
+// expect: Causal row sums (should be ~1.0):
+// expect: Tensor<[1, 4, 1]>(1, 1, 1, 1)
+// expect: test_attention: ALL PASSED
+
+let x = tensor_randn([1, 4, 8])
+let wq = tensor_randn([8, 8]) * 0.1
+let wk = tensor_randn([8, 8]) * 0.1
+let wv = tensor_randn([8, 8]) * 0.1
+
+// Q, K, V projections via batched matmul: [1,4,8] @@ [8,8] → [1,4,8]
+let q = x @@ wq
+let k = x @@ wk
+let v = x @@ wv
+
+println("Q shape:")
+println(tensor_shape(q))
+
+// Transpose K: [1, 4, 8] → [1, 8, 4]
+let kt = tensor_permute(k, [0, 2, 1])
+println("K^T shape:")
+println(tensor_shape(kt))
+
+// Scaled dot-product: [1,4,8] @@ [1,8,4] → [1,4,4]
+let scale = 0.353553  // 1/sqrt(8) ≈ 0.3536
+let scores = (q @@ kt) * scale
+println("Scores shape:")
+println(tensor_shape(scores))
+
+// Softmax with numerical stability
+let max_scores = tensor_max_axis(scores, -1)  // [1, 4, 1]
+println("Max scores shape:")
+println(tensor_shape(max_scores))
+
+let shifted = scores - max_scores  // broadcast [1,4,4] - [1,4,1]
+let exp_scores = tensor_exp(shifted)
+let sum_exp = tensor_sum_axis(exp_scores, -1)  // [1, 4, 1]
+println("Sum exp shape:")
+println(tensor_shape(sum_exp))
+
+let attn_weights = exp_scores / sum_exp  // broadcast [1,4,4] / [1,4,1]
+println("Attn weights shape:")
+println(tensor_shape(attn_weights))
+
+// Verify rows sum to 1.0
+let row_sums = tensor_sum_axis(attn_weights, -1)
+println("Row sums (should be ~1.0):")
+println(row_sums)
+
+// Attention output: [1,4,4] @@ [1,4,8] → [1,4,8]
+let output = attn_weights @@ v
+println("Output shape:")
+println(tensor_shape(output))
+
+// === Test with causal mask ===
+let mask = tensor_causal_mask(4)  // [1, 4, 4]
+let masked_scores = scores + mask  // future positions get -1e9
+println("Causal mask applied:")
+println(tensor_shape(masked_scores))
+
+// Softmax on masked scores
+let max_masked = tensor_max_axis(masked_scores, -1)
+let shifted_masked = masked_scores - max_masked
+let exp_masked = tensor_exp(shifted_masked)
+let sum_masked = tensor_sum_axis(exp_masked, -1)
+let causal_weights = exp_masked / sum_masked
+
+let causal_sums = tensor_sum_axis(causal_weights, -1)
+println("Causal row sums (should be ~1.0):")
+println(causal_sums)
+
+println("test_attention: ALL PASSED")

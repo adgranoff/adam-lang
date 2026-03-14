@@ -1,0 +1,27 @@
+// Linear regression — tensor operations and training concepts.
+//
+// Demonstrates: tensor creation, matmul, element-wise ops, sum.
+// This is a forward-pass-only example (no training loop yet).
+
+// Simple linear model: y = X @@ weights + bias
+let X = tensor_from_array([1, 1, 2, 1, 3, 1, 4, 1], [4, 2])
+let weights = tensor_from_array([2, 1], [2, 1])
+
+// Predictions: [4,2] @@ [2,1] -> [4,1]
+let predictions = X @@ weights
+println(predictions)
+// expect: Tensor<[4, 1]>(3, 5, 7, 9)
+
+// True targets
+let targets = tensor_from_array([3, 5, 7, 9], [4, 1])
+
+// Residuals (should be zero for perfect fit)
+let residuals = predictions - targets
+println(tensor_sum(residuals))
+// expect: 0
+
+// Mean squared error
+let sq_err = residuals * residuals
+let mse = tensor_sum(sq_err)
+println(mse)
+// expect: 0

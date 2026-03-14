@@ -1,0 +1,27 @@
+// Neural network — demonstrates tensors and grad() autograd.
+//
+// A minimal 2-layer network: input @@ w1 @@ w2 -> scalar loss
+// Then we use grad() to compute the gradient of the loss w.r.t. input.
+
+// Weights (small fixed values for deterministic output)
+let w1 = tensor_from_array([1, 0, 0, 1, 0, 0], [3, 2])
+let w2 = tensor_from_array([1, 1], [2, 1])
+
+// Forward pass function
+fn predict(x) {
+    let h = x @@ w1
+    let out = h @@ w2
+    tensor_sum(out)
+}
+
+// Input: [1, 3] vector -> 1 sample, 3 features
+let input = tensor_from_array([1, 2, 3], [1, 3])
+let loss = predict(input)
+println(loss)
+// expect: 3
+
+// Compute gradient via autograd
+let grad_predict = grad(predict)
+let grads = grad_predict(input)
+println(tensor_shape(grads))
+// expect: [1, 3]

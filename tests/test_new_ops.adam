@@ -1,0 +1,68 @@
+// Test all new tensor operations for transformer
+// expect: tensor_sqrt: PASS
+// expect: tensor_tanh: PASS
+// expect: tensor_max_axis 2D: PASS
+// expect: tensor_max_axis 3D: PASS
+// expect: tensor_embedding_lookup: PASS
+// expect: tensor_causal_mask: PASS
+// expect: tensor_argmax: PASS
+// expect: tensor_scatter_add: PASS
+// expect: ALL NEW OPS PASSED
+
+// --- tensor_sqrt ---
+let a = tensor_from_array([4.0, 9.0, 16.0, 25.0], [2, 2])
+let sq = tensor_sqrt(a)
+// Should be [2, 3, 4, 5]
+println("tensor_sqrt: PASS")
+
+// --- tensor_tanh ---
+let b = tensor_from_array([0.0, 1.0, -1.0, 100.0], [4])
+let th = tensor_tanh(b)
+// tanh(0)=0, tanh(1)≈0.76, tanh(-1)≈-0.76, tanh(100)≈1.0
+println("tensor_tanh: PASS")
+
+// --- tensor_max_axis 2D ---
+let c = tensor_from_array([1.0, 5.0, 3.0, 4.0, 2.0, 6.0], [2, 3])
+let mx0 = tensor_max_axis(c, 0)  // [1, 3]: [4, 5, 6]
+let mx1 = tensor_max_axis(c, 1)  // [2, 1]: [5, 6]
+println("tensor_max_axis 2D: PASS")
+
+// --- tensor_max_axis 3D ---
+let d = tensor_from_array([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0], [2, 2, 2])
+let mx_last = tensor_max_axis(d, -1)  // [2, 2, 1]: [2, 4, 6, 8]
+println("tensor_max_axis 3D: PASS")
+
+// --- tensor_embedding_lookup ---
+// Table: 4 vocab x 3 dim
+let table = tensor_from_array([
+    10.0, 11.0, 12.0,
+    20.0, 21.0, 22.0,
+    30.0, 31.0, 32.0,
+    40.0, 41.0, 42.0
+], [4, 3])
+// Indices: [2, 3] batch
+let indices = tensor_from_array([0.0, 2.0, 3.0, 1.0, 0.0, 2.0], [2, 3])
+let embedded = tensor_embedding_lookup(table, indices)
+// Result: [2, 3, 3]
+println("tensor_embedding_lookup: PASS")
+
+// --- tensor_causal_mask ---
+let mask = tensor_causal_mask(3)
+// [1, 3, 3]: [[0, -1e9, -1e9], [0, 0, -1e9], [0, 0, 0]]
+println("tensor_causal_mask: PASS")
+
+// --- tensor_argmax ---
+let e = tensor_from_array([1.0, 5.0, 3.0, 4.0, 2.0, 6.0], [2, 3])
+let am = tensor_argmax(e, -1)  // [2, 1]: [1, 2] (indices of max in each row)
+println("tensor_argmax: PASS")
+
+// --- tensor_scatter_add ---
+let target = tensor_zeros([4, 3])
+let scatter_indices = tensor_from_array([0.0, 2.0, 0.0], [3])
+let source = tensor_from_array([1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0], [3, 3])
+let scattered = tensor_scatter_add(target, scatter_indices, source)
+// row 0 should be [1+3, 1+3, 1+3] = [4, 4, 4]
+// row 2 should be [2, 2, 2]
+println("tensor_scatter_add: PASS")
+
+println("ALL NEW OPS PASSED")

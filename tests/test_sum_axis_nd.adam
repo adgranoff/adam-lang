@@ -1,0 +1,44 @@
+// Test tensor_sum_axis — N-dimensional and negative axis support
+// expect: 2D axis=0:
+// expect: Tensor<[1, 3]>(5, 7, 9)
+// expect: 2D axis=1:
+// expect: Tensor<[2, 1]>(6, 15)
+// expect: 3D axis=0:
+// expect: Tensor<[1, 2, 3]>(8, 10, 12, 14, 16, 18)
+// expect: 3D axis=1:
+// expect: Tensor<[2, 1, 3]>(5, 7, 9, 17, 19, 21)
+// expect: 3D axis=2:
+// expect: Tensor<[2, 2, 1]>(6, 15, 24, 33)
+// expect: 3D axis=-1 (same as axis=2):
+// expect: Tensor<[2, 2, 1]>(6, 15, 24, 33)
+// expect: 2D axis=-1 (same as axis=1):
+// expect: Tensor<[2, 1]>(6, 15)
+// expect: test_sum_axis_nd: ALL PASSED
+
+// === 2D — must match existing behavior exactly ===
+let a = tensor_from_array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [2, 3])
+println("2D axis=0:")
+println(tensor_sum_axis(a, 0))
+println("2D axis=1:")
+println(tensor_sum_axis(a, 1))
+
+// === 3D — new functionality ===
+// Shape [2, 2, 3], values 1..12
+let b = tensor_from_array([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0,11.0,12.0], [2, 2, 3])
+
+println("3D axis=0:")
+println(tensor_sum_axis(b, 0))
+
+println("3D axis=1:")
+println(tensor_sum_axis(b, 1))
+
+println("3D axis=2:")
+println(tensor_sum_axis(b, 2))
+
+println("3D axis=-1 (same as axis=2):")
+println(tensor_sum_axis(b, -1))
+
+println("2D axis=-1 (same as axis=1):")
+println(tensor_sum_axis(a, -1))
+
+println("test_sum_axis_nd: ALL PASSED")

@@ -1,0 +1,10 @@
+fn double(x) { x * 2 }
+fn add_one(x) { x + 1 }
+
+let a = 5 |> double
+println(a)
+// expect: 10
+
+let b = a |> add_one
+println(b)
+// expect: 11

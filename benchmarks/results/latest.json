@@ -1,0 +1,32 @@
+[
+  {
+    "name": "fib35",
+    "iterations": 5,
+    "mean_ms": 1098.05,
+    "median_ms": 1010.15,
+    "min_ms": 991.21,
+    "max_ms": 1292.81,
+    "stddev_ms": 140.64,
+    "compile_ms": 15.43
+  },
+  {
+    "name": "loop_sum",
+    "iterations": 5,
+    "mean_ms": 47.48,
+    "median_ms": 45.12,
+    "min_ms": 41.61,
+    "max_ms": 55.37,
+    "stddev_ms": 5.44,
+    "compile_ms": 15.34
+  },
+  {
+    "name": "string_concat",
+    "iterations": 5,
+    "mean_ms": 111.6,
+    "median_ms": 91.7,
+    "min_ms": 74.81,
+    "max_ms": 180.64,
+    "stddev_ms": 42.85,
+    "compile_ms": 15.33
+  }
+]

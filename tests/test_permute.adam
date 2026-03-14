@@ -1,0 +1,35 @@
+// Test tensor_permute — N-dimensional axis reordering
+// expect: 2D transpose shape:
+// expect: [3, 2]
+// expect: 2D transpose:
+// expect: Tensor<[3, 2]>(1, 4, 2, 5, 3, 6)
+// expect: 3D permute [0,2,1] shape:
+// expect: [2, 2, 2]
+// expect: 3D permute:
+// expect: Tensor<[2, 2, 2]>(1, 3, 2, 4, 5, 7, 6, 8)
+// expect: Identity permute:
+// expect: Tensor<[2, 3]>(1, 2, 3, 4, 5, 6)
+// expect: test_permute: ALL PASSED
+
+// --- 2D transpose via permute (should match tensor_transpose) ---
+let a = tensor_from_array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [2, 3])
+let b = tensor_permute(a, [1, 0])
+println("2D transpose shape:")
+println(tensor_shape(b))
+println("2D transpose:")
+println(b)
+
+// --- 3D permute: swap last two axes ---
+let c = tensor_from_array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], [2, 2, 2])
+let d = tensor_permute(c, [0, 2, 1])
+println("3D permute [0,2,1] shape:")
+println(tensor_shape(d))
+println("3D permute:")
+println(d)
+
+// --- Identity permute (no change) ---
+let e = tensor_permute(a, [0, 1])
+println("Identity permute:")
+println(e)
+
+println("test_permute: ALL PASSED")

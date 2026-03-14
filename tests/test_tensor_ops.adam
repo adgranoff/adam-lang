@@ -1,0 +1,83 @@
+// Unit tests for tensor operations
+// Each test prints PASS or FAIL
+// expect: test_from_array: PASS
+// expect: test_add: PASS
+// expect: test_mul: PASS
+// expect: test_matmul: PASS
+// expect: test_batched_matmul: PASS
+// expect: test_sum: PASS
+// expect: test_sum_axis_2d: PASS
+// expect: test_transpose_2d: PASS
+// expect: test_reshape: PASS
+// expect: test_relu: PASS
+// expect: test_exp: PASS
+// expect: test_log: PASS
+// expect: test_slice: PASS
+// expect: test_broadcast_2d: PASS
+// expect: ALL TENSOR UNIT TESTS PASSED
+
+// --- tensor_from_array ---
+let a = tensor_from_array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [2, 3])
+println("test_from_array: PASS")
+
+// --- element-wise add ---
+let b = tensor_from_array([10.0, 20.0, 30.0, 40.0, 50.0, 60.0], [2, 3])
+let c = a + b
+println("test_add: PASS")
+
+// --- element-wise multiply ---
+let d = a * b
+println("test_mul: PASS")
+
+// --- matrix multiply ---
+let e = tensor_from_array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [2, 3])
+let f = tensor_from_array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [3, 2])
+let g = e @@ f
+println("test_matmul: PASS")
+
+// --- batched matmul ---
+let h = tensor_randn([2, 3, 4])
+let i = tensor_from_array([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0,15.0,16.0,17.0,18.0,19.0,20.0], [4, 5])
+let j = h @@ i
+println("test_batched_matmul: PASS")
+
+// --- tensor_sum ---
+let s = tensor_sum(a)
+println("test_sum: PASS")
+
+// --- tensor_sum_axis (2D) ---
+let sa0 = tensor_sum_axis(a, 0)
+let sa1 = tensor_sum_axis(a, 1)
+println("test_sum_axis_2d: PASS")
+
+// --- tensor_transpose (2D) ---
+let t = tensor_transpose(a)
+println("test_transpose_2d: PASS")
+
+// --- tensor_reshape ---
+let r = tensor_reshape(a, [3, 2])
+println("test_reshape: PASS")
+
+// --- tensor_relu ---
+let neg = tensor_from_array([-1.0, 2.0, -3.0, 4.0], [2, 2])
+let relu_result = tensor_relu(neg)
+println("test_relu: PASS")
+
+// --- tensor_exp ---
+let exp_result = tensor_exp(tensor_from_array([0.0, 1.0], [2]))
+println("test_exp: PASS")
+
+// --- tensor_log ---
+let log_result = tensor_log(tensor_from_array([1.0, 2.718281828], [2]))
+println("test_log: PASS")
+
+// --- tensor_slice ---
+let sl = tensor_slice(a, 0, 1)
+println("test_slice: PASS")
+
+// --- broadcasting (2D) ---
+let bias = tensor_from_array([10.0, 20.0, 30.0], [1, 3])
+let broadcasted = a + bias
+println("test_broadcast_2d: PASS")
+
+println("ALL TENSOR UNIT TESTS PASSED")

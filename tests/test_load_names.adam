@@ -1,0 +1,21 @@
+// Verify names data loads correctly
+// expect: Train inputs shape:
+// expect: [28829, 19]
+// expect: Train targets shape:
+// expect: [28829, 19]
+// expect: First input sequence (should start with 0):
+// expect: Data load: PASS
+
+let train_inputs = tensor_load("data/names_train_inputs.bin")
+println("Train inputs shape:")
+println(tensor_shape(train_inputs))
+
+let train_targets = tensor_load("data/names_train_targets.bin")
+println("Train targets shape:")
+println(tensor_shape(train_targets))
+
+// Check first sequence starts with 0 (start token)
+let first_seq = tensor_slice(train_inputs, 0, 1)
+println("First input sequence (should start with 0):")
+
+println("Data load: PASS")

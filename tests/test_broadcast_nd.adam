@@ -1,0 +1,55 @@
+// Test N-dimensional broadcasting (3D+)
+// expect: 2D broadcast bias:
+// expect: Tensor<[2, 3]>(11, 22, 33, 14, 25, 36)
+// expect: 2D broadcast col:
+// expect: Tensor<[2, 3]>(101, 102, 103, 204, 205, 206)
+// expect: 3D + 1D broadcast:
+// expect: Tensor<[2, 2, 2]>(11, 22, 13, 24, 15, 26, 17, 28)
+// expect: 3D + [1,1,2] broadcast:
+// expect: Tensor<[2, 2, 2]>(11, 22, 13, 24, 15, 26, 17, 28)
+// expect: 3D - [2,2,1] broadcast (subtract max per row):
+// expect: Tensor<[2, 2, 2]>(-1, 0, -1, 0, -1, 0, -1, 0)
+// expect: 3D * scalar:
+// expect: Tensor<[2, 2, 2]>(2, 4, 6, 8, 10, 12, 14, 16)
+// expect: 3D / [2,2,1] broadcast:
+// expect: Tensor<[2, 2, 2]>(0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4)
+// expect: test_broadcast_nd: ALL PASSED
+
+// === 2D tests — MUST match existing behavior ===
+let a = tensor_from_array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [2, 3])
+let bias = tensor_from_array([10.0, 20.0, 30.0], [1, 3])
+println("2D broadcast bias:")
+println(a + bias)
+
+let col = tensor_from_array([100.0, 200.0], [2, 1])
+println("2D broadcast col:")
+println(a + col)
+
+// === 3D tests — new functionality ===
+let c = tensor_from_array([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0], [2, 2, 2])
+
+// [2,2,2] + [2] → broadcast last dim
+let d = tensor_from_array([10.0, 20.0], [2])
+println("3D + 1D broadcast:")
+println(c + d)
+
+// Same result via [1,1,2]
+let e = tensor_from_array([10.0, 20.0], [1, 1, 2])
+println("3D + [1,1,2] broadcast:")
+println(c + e)
+
+// [2,2,2] - [2,2,1] → subtract per-row max (key for softmax)
+let maxvals = tensor_from_array([2.0, 4.0, 6.0, 8.0], [2, 2, 1])
+println("3D - [2,2,1] broadcast (subtract max per row):")
+println(c - maxvals)
+
+// 3D * scalar
+println("3D * scalar:")
+println(c * 2.0)
+
+// [2,2,2] / [2,2,1] → divide per-row (key for softmax normalization)
+let divisor = tensor_from_array([2.0, 2.0, 2.0, 2.0], [2, 2, 1])
+println("3D / [2,2,1] broadcast:")
+println(c / divisor)
+
+println("test_broadcast_nd: ALL PASSED")

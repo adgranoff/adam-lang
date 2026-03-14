@@ -1,0 +1,121 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Adam",
+  "scopeName": "source.adam",
+  "fileTypes": ["adam"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#operators" },
+    { "include": "#functions" },
+    { "include": "#variables" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.adam",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.adam",
+          "match": "\\b(if|else|while|for|in|match|return|break|continue)\\b"
+        },
+        {
+          "name": "keyword.declaration.adam",
+          "match": "\\b(fn|let|type|struct|impl)\\b"
+        },
+        {
+          "name": "constant.language.adam",
+          "match": "\\b(true|false|nil)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.adam",
+          "match": "\\b(Int|Float|String|Bool|Nil)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.adam",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.adam",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.adam",
+          "match": "\\b\\d+\\.\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.adam",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.pipe.adam",
+          "match": "\\|>"
+        },
+        {
+          "name": "keyword.operator.arrow.adam",
+          "match": "->|=>"
+        },
+        {
+          "name": "keyword.operator.comparison.adam",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.logical.adam",
+          "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.arithmetic.adam",
+          "match": "\\*\\*|[+\\-*/%]"
+        },
+        {
+          "name": "keyword.operator.assignment.adam",
+          "match": "="
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.adam",
+          "match": "\\b([a-zA-Z_]\\w*)\\s*(?=\\()"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "variable.other.adam",
+          "match": "\\b[a-zA-Z_]\\w*\\b"
+        }
+      ]
+    }
+  }
+}

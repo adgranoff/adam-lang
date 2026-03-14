@@ -1,0 +1,49 @@
+// Tensor basics — creation, matmul, element-wise ops.
+
+// Create tensors from shape arrays
+let zeros = tensor_zeros([2, 3])
+println(zeros)
+// expect: Tensor<[2, 3]>(0, 0, 0, 0, 0, 0)
+
+let ones = tensor_ones([3, 2])
+println(ones)
+// expect: Tensor<[3, 2]>(1, 1, 1, 1, 1, 1)
+
+// Matrix multiply: [2,3] @@ [3,2] -> [2,2]
+let result = zeros @@ ones
+println(result)
+// expect: Tensor<[2, 2]>(0, 0, 0, 0)
+
+// Create from data
+let a = tensor_from_array([1, 2, 3, 4, 5, 6], [2, 3])
+let b = tensor_from_array([1, 0, 0, 1, 0, 0], [3, 2])
+let c = a @@ b
+println(c)
+// expect: Tensor<[2, 2]>(1, 2, 4, 5)
+
+// Element-wise operations
+let x = tensor_from_array([1, 2, 3, 4], [2, 2])
+let y = tensor_from_array([10, 20, 30, 40], [2, 2])
+println(x + y)
+// expect: Tensor<[2, 2]>(11, 22, 33, 44)
+println(y - x)
+// expect: Tensor<[2, 2]>(9, 18, 27, 36)
+println(x * y)
+// expect: Tensor<[2, 2]>(10, 40, 90, 160)
+
+// Negation
+println(-x)
+// expect: Tensor<[2, 2]>(-1, -2, -3, -4)
+
+// Shape and sum
+println(tensor_shape(a))
+// expect: [2, 3]
+println(tensor_sum(x))
+// expect: 10
+
+// Transpose
+let t = tensor_transpose(a)
+println(tensor_shape(t))
+// expect: [3, 2]
+println(t)
+// expect: Tensor<[3, 2]>(1, 4, 2, 5, 3, 6)

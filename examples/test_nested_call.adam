@@ -1,0 +1,5 @@
+fn double(x) { x * 2 }
+fn add_one(x) { x + 1 }
+let result = add_one(double(5))
+println(result)
+// expect: 11
